@@ -1,0 +1,6 @@
+{
+  "name": "ClearNotify",
+  "description": "AI-powered notification summarizer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
