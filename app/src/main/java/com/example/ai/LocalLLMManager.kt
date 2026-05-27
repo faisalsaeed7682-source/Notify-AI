@@ -218,23 +218,28 @@ object LocalLLMManager {
             // Update Hierarchical Memory
             com.example.ai.llm.MemoryManager.updateMemory(clusters)
 
-            val sb = StringBuilder("### Notification Summary\n\n")
+            val sb = StringBuilder("### Personalized Intelligence Digest\n\n")
             clusters.forEach { cluster ->
-                sb.append("**${cluster.topicName}** (${cluster.priority})\n")
+                val signalBadge = if (cluster.priority.contains("High")) "🔥 High Signal" else "📥 Normal"
+                sb.append("**${cluster.topicName}** ($signalBadge)\n")
                 cluster.chunks.forEach { 
                     sb.append("- ${it.cleanText}\n")
-                    if (it.priorityScore > 0.6f) {
-                        sb.append("  *(AI Reason: ${it.reasoning})*\n")
+                    if (it.priorityScore >= 0.7f || it.behavioralScore > 0.8f) {
+                        val reasonText = if (it.behavioralScore > 0.8f) "High personal interaction rate." else it.reasoning
+                        sb.append("  *(AI Rationale: $reasonText)*\n")
                     }
                 }
                 sb.append("\n")
             }
             
             // Grounded retrieval-only verification
-            return verifyGroundedResponse(sb.toString(), chunks)
+            val finalBriefing = verifyGroundedResponse(sb.toString(), chunks)
+            
+            addLog("ai_pipeline: briefing generated successfully (Personalized Reranking: Active)")
+            return finalBriefing
         } catch (e: Exception) {
-            addLog("ai_error: briefing failed: ${e.message}")
-            return "Sorry, I encountered an issue while generating your summary. Gracefully falling back to raw highlights:\n\n" + 
+            addLog("ai_error: briefing pipeline collapsed: ${e.message}")
+            return "Notify AI encountered a temporary issue with the deep semantic pipeline. Falling back to a simplified summary:\n\n" + 
                    generateLightweightDigest(notifications)
         }
     }

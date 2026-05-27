@@ -120,12 +120,10 @@ class ClearNotificationListenerService : NotificationListenerService() {
         }
         
                 val manualCategory = db.notificationDao().getCategoryRule(packageName)
-                val aiCategory = if (manualCategory == null) {
-                    com.example.ai.LocalLLMManager.categorizeNotification(appName, title, content)
-                } else { "" }
+                val intel = com.example.ai.intelligence.NotificationIntelligence.analyze(appName, title, content)
 
-                val finalCategory = manualCategory ?: if (aiCategory == "other" || aiCategory.isEmpty()) category else aiCategory
-                val isSpamFlag = aiCategory == "spam"
+                val finalCategory = manualCategory ?: if (intel.category == "Social" || intel.category == "Finance" || intel.category == "Security") intel.category else category
+                val isSpamFlag = intel.isSpam
 
                 val record = NotificationRecord(
                     packageName = packageName,
@@ -138,7 +136,11 @@ class ClearNotificationListenerService : NotificationListenerService() {
                     notificationKey = notificationKey,
                     hasReply = hasReply,
                     isSpam = isSpamFlag,
-                    isArchived = isSpamFlag // Automatically archive if it's spam
+                    isArchived = isSpamFlag, // Automatically archive if it's spam
+                    priority = intel.priority,
+                    aiCategory = intel.category,
+                    primaryReasoning = intel.reasoning,
+                    importanceScore = intel.priority
                 )
                 db.notificationDao().insertNotification(record)
                 Log.d("NotifyListener", "Saved notification: $appName - $title (Category: ${record.category})")
