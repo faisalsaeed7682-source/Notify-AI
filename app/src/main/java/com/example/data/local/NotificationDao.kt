@@ -71,6 +71,12 @@ interface NotificationDao {
     @Query("UPDATE notifications SET isStarred = CASE WHEN isStarred = 1 THEN 0 ELSE 1 END WHERE id = :id")
     suspend fun toggleStar(id: Int)
     
+    @Query("UPDATE notifications SET interactionCount = interactionCount + 1 WHERE id = :id")
+    suspend fun incrementInteraction(id: Int)
+
+    @Query("UPDATE notifications SET importanceScore = :score WHERE id = :id")
+    suspend fun updateImportance(id: Int, score: Float)
+
     @Query("DELETE FROM notifications WHERE id = :id")
     suspend fun deleteNotificationById(id: Int)
     

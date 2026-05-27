@@ -84,4 +84,12 @@ class NotificationRepository(private val dao: NotificationDao) {
     }
 
     fun getAllCategoryRules(): Flow<List<com.example.data.local.AppCategoryRule>> = dao.getAllCategoryRules()
+
+    suspend fun recordInteraction(id: Int) {
+        dao.incrementInteraction(id)
+    }
+
+    suspend fun updateImportance(id: Int, score: Float) {
+        dao.updateImportance(id, score)
+    }
 }

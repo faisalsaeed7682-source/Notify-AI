@@ -19,5 +19,10 @@ data class NotificationRecord(
     val imagePath: String? = null,
     val notificationKey: String? = null,
     val hasReply: Boolean = false,
-    val isStarred: Boolean = false
+    val isStarred: Boolean = false,
+    val priority: Float = 0.5f,
+    val aiCategory: String = "other",
+    val primaryReasoning: String = "",
+    val interactionCount: Int = 0,
+    val importanceScore: Float = 0f
 )

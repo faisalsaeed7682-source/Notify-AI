@@ -263,6 +263,7 @@ fun DashboardScreen(
                             NotificationSimpleCard(
                                 record = record,
                                 onClick = { 
+                                    viewModel.recordInteraction(record.id)
                                     try {
                                         val intent = context.packageManager.getLaunchIntentForPackage(packageName)
                                         if (intent != null) {

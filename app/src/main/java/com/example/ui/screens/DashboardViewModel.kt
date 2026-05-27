@@ -147,6 +147,12 @@ class DashboardViewModel(private val repository: NotificationRepository, private
             repository.markSpam(id)
         }
     }
+
+    fun recordInteraction(id: Int) {
+        viewModelScope.launch {
+            repository.recordInteraction(id)
+        }
+    }
     
     fun blockApp(packageName: String) {
         viewModelScope.launch {
