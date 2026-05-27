@@ -200,33 +200,43 @@ object LocalLLMManager {
     suspend fun generateBriefing(notifications: List<NotificationRecord>, tone: String = "Friendly"): String {
         if (notifications.isEmpty()) return "Inbox is clear."
         
-        if (isThrottlingRequired()) {
+        val throttleState = getThrottlingAction()
+        if (throttleState == ThrottlingAction.STRICT_BLOCK) {
+            return "Note: Extreme thermal detected. AI functionality suspended to protect device."
+        }
+        
+        if (throttleState == ThrottlingAction.LIGHTWEIGHT) {
             return "Note: Battery is low. Generating a lightweight summary to save power.\n\n" + 
                    generateLightweightDigest(notifications)
         }
 
         addLog("ai_pipeline: initializing context packing...")
-        val chunks = ragManager.prepareContext(notifications)
-        val clusters = performSemanticGrouping(chunks)
-        
-        // Update Hierarchical Memory
-        com.example.ai.llm.MemoryManager.updateMemory(clusters)
+        try {
+            val chunks = ragManager.prepareContext(notifications)
+            val clusters = performSemanticGrouping(chunks)
+            
+            // Update Hierarchical Memory
+            com.example.ai.llm.MemoryManager.updateMemory(clusters)
 
-        val sb = StringBuilder("### Notification Summary\n\n")
-        clusters.forEach { cluster ->
-            sb.append("**${cluster.topicName}** (${cluster.priority})\n")
-            cluster.chunks.forEach { 
-                sb.append("- ${it.cleanText}\n")
-                if (it.priorityScore > 0.6f) {
-                    sb.append("  *(AI Reason: ${it.reasoning})*\n")
+            val sb = StringBuilder("### Notification Summary\n\n")
+            clusters.forEach { cluster ->
+                sb.append("**${cluster.topicName}** (${cluster.priority})\n")
+                cluster.chunks.forEach { 
+                    sb.append("- ${it.cleanText}\n")
+                    if (it.priorityScore > 0.6f) {
+                        sb.append("  *(AI Reason: ${it.reasoning})*\n")
+                    }
                 }
+                sb.append("\n")
             }
-            sb.append("\n")
+            
+            // Grounded retrieval-only verification
+            return verifyGroundedResponse(sb.toString(), chunks)
+        } catch (e: Exception) {
+            addLog("ai_error: briefing failed: ${e.message}")
+            return "Sorry, I encountered an issue while generating your summary. Gracefully falling back to raw highlights:\n\n" + 
+                   generateLightweightDigest(notifications)
         }
-        
-        // Hallucination Control / Answer Verification
-        val finalResponse = verifyResponse(sb.toString(), chunks)
-        return finalResponse
     }
 
     fun generateTextStream(prompt: String, notifications: List<NotificationRecord>): Flow<String> = flow {
@@ -255,12 +265,31 @@ object LocalLLMManager {
         }
     }
 
-    private fun verifyResponse(response: String, sources: List<DocumentChunk>): String {
+    private fun verifyGroundedResponse(response: String, sources: List<DocumentChunk>): String {
+        val totalEvidenceCount = sources.size
+        if (totalEvidenceCount == 0) return "No evidence found to support AI generation."
+
         val appsInSources = sources.map { it.appName.lowercase() }.toSet()
-        val appsInResponse = response.lowercase().split(" ").filter { it.length > 3 }
+        val contentInSources = sources.joinToString(" ").lowercase()
         
+        val lines = response.split("\n")
+        val groundedLines = lines.filter { line ->
+            if (line.startsWith("- ") || line.startsWith("• ")) {
+                // Check if line content exists in sources (approx check)
+                val cleanLine = line.substring(2).lowercase()
+                val significantWords = cleanLine.split(" ").filter { it.length > 4 }
+                significantWords.any { contentInSources.contains(it) }
+            } else {
+                true // keep headings
+            }
+        }
+
+        val result = groundedLines.joinToString("\n")
+        
+        // Final Hallucination Safeguard
+        val appsInResponse = result.lowercase().split(" ").filter { it.length > 3 }
         val hallucinatedApps = mutableListOf<String>()
-        val popularApps = listOf("facebook", "whatsapp", "instagram", "netflix", "paypal", "slack")
+        val popularApps = listOf("facebook", "whatsapp", "instagram", "netflix", "paypal", "slack", "outlook")
         
         popularApps.forEach { app ->
             if (appsInResponse.contains(app) && !appsInSources.any { it.contains(app) }) {
@@ -269,15 +298,21 @@ object LocalLLMManager {
         }
 
         return if (hallucinatedApps.isNotEmpty()) {
-            response + "\n\n*(Note: I filtered some potentially inaccurate references to ${hallucinatedApps.joinToString(", ")}.)*"
+            result + "\n\n*(Note: Found ${hallucinatedApps.size} inconsistent references. These were kept but flagged for accuracy.)*"
         } else {
-            response
+            result
         }
     }
 
-    private fun isThrottlingRequired(): Boolean {
-        // Mock check for battery/thermal throttling
-        return deviceTemperature.value > 45.0f // Or battery < 15%
+    enum class ThrottlingAction { NORMAL, LIGHTWEIGHT, STRICT_BLOCK }
+
+    private fun getThrottlingAction(): ThrottlingAction {
+        return when {
+            deviceTemperature.value > 55.0f -> ThrottlingAction.STRICT_BLOCK
+            deviceTemperature.value > 45.0f -> ThrottlingAction.LIGHTWEIGHT
+            ramAvailable.value < 1.0f -> ThrottlingAction.LIGHTWEIGHT
+            else -> ThrottlingAction.NORMAL
+        }
     }
 
     private fun generateLightweightDigest(notifications: List<NotificationRecord>): String {

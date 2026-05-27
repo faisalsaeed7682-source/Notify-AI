@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [NotificationRecord::class, BlockedApp::class, AppCategoryRule::class], version = 6, exportSchema = false)
+@Database(entities = [NotificationRecord::class, BlockedApp::class, AppCategoryRule::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
 

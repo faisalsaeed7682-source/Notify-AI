@@ -2,6 +2,7 @@ package com.example.ai.rag
 
 import com.example.ai.embedding.EmbeddingService
 import com.example.ai.intelligence.NotificationIntelligence
+import com.example.ai.personalization.PersonalizationEngine
 import com.example.data.local.NotificationRecord
 import kotlin.math.sqrt
 
@@ -18,13 +19,15 @@ data class DocumentChunk(
     val isUrgent: Boolean,
     val category: String,
     val reasoning: String = "",
-    var retrievalScore: Float = 0f
+    var retrievalScore: Float = 0f,
+    var behavioralScore: Float = 0.5f
 )
 
 class RAGManager(private val embeddingService: EmbeddingService) {
+    private val vectorSearchEngine = VectorSearchEngine()
 
     /**
-     * Dynamic Context Packing with Token Budgeting and Semantic Reranking
+     * Dynamic Context Packing with Token Budgeting and Production Semantic Reranking
      */
     suspend fun prepareContext(
         notifications: List<NotificationRecord>, 
@@ -38,6 +41,8 @@ class RAGManager(private val embeddingService: EmbeddingService) {
         deduplicated.values.forEach { notif ->
             val intel = NotificationIntelligence.analyze(notif.appName, notif.title, notif.content)
             val text = "[${notif.appName}] ${notif.title}: ${notif.content}"
+            val bScore = PersonalizationEngine.calculateBehavioralScore(notif)
+            
             allChunks.add(
                 DocumentChunk(
                     id = notif.id.toString(),
@@ -51,34 +56,44 @@ class RAGManager(private val embeddingService: EmbeddingService) {
                     isSpam = intel.isSpam,
                     isUrgent = intel.isUrgent,
                     category = intel.category,
-                    reasoning = intel.reasoning
+                    reasoning = intel.reasoning,
+                    behavioralScore = bScore
                 )
             )
         }
 
-        // Apply Reranking if query is provided
+        // Apply Advanced Reranking
         if (query != null) {
             val queryEmbedding = embeddingService.getEmbedding(query)
+            val vectorMatches = vectorSearchEngine.findNearestNeighbors(queryEmbedding, allChunks, topK = allChunks.size)
+            
             allChunks.onEach { chunk ->
-                val semanticSim = cosineSimilarity(queryEmbedding, chunk.embedding)
-                // Hybrid Score: 60% Semantic, 20% Urgency, 10% Recency, 10% App Priority
+                val semanticSim = vectorMatches.find { it.id == chunk.id }?.retrievalScore ?: 0f
+                
+                // Production Hybrid Score: 
+                // 50% Semantic similarity
+                // 20% Personalization (Behavioral)
+                // 15% Intelligence (Urgency/Type)
+                // 15% Time Recency
                 val ageHours = (System.currentTimeMillis() - chunk.timestamp).toFloat() / (1000 * 60 * 60)
                 val recencyScore = (1.0f / (1.0f + ageHours)).coerceIn(0f, 1f)
                 
-                chunk.retrievalScore = (semanticSim * 0.6f) + (chunk.priorityScore * 0.2f) + (recencyScore * 0.2f)
+                chunk.retrievalScore = (semanticSim * 0.5f) + (chunk.behavioralScore * 0.2f) + 
+                                       (chunk.priorityScore * 0.15f) + (recencyScore * 0.15f)
             }
         } else {
-            // Default: Importance and Recency
+            // Default Briefing: Personalization + Importance + Recency
             allChunks.onEach { chunk ->
                 val ageHours = (System.currentTimeMillis() - chunk.timestamp).toFloat() / (1000 * 60 * 60)
                 val recencyScore = (1.0f / (1.0f + ageHours)).coerceIn(0f, 1f)
-                chunk.retrievalScore = (chunk.priorityScore * 0.7f) + (recencyScore * 0.3f)
+                chunk.retrievalScore = (chunk.behavioralScore * 0.4f) + (chunk.priorityScore * 0.4f) + (recencyScore * 0.2f)
             }
         }
 
         val result = mutableListOf<DocumentChunk>()
         allChunks.sortedByDescending { it.retrievalScore }.forEach { chunk ->
-            val estimatedTokens = (chunk.rawText.length / 4) + 12
+            // Token estimation for Context packing (4 chars/token + safety overhead)
+            val estimatedTokens = (chunk.rawText.length / 4) + 16
             if (tokenCount + estimatedTokens <= maxTokens) {
                 result.add(chunk)
                 tokenCount += estimatedTokens
