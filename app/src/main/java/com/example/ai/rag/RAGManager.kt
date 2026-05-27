@@ -17,56 +17,83 @@ data class DocumentChunk(
     val isSpam: Boolean,
     val isUrgent: Boolean,
     val category: String,
+    val reasoning: String = "",
     var retrievalScore: Float = 0f
 )
 
 class RAGManager(private val embeddingService: EmbeddingService) {
 
     /**
-     * Dynamic Context Packing with Token Budgeting
+     * Dynamic Context Packing with Token Budgeting and Semantic Reranking
      */
-    suspend fun prepareContext(notifications: List<NotificationRecord>, maxTokens: Int = 4096): List<DocumentChunk> {
-        val uniqueMap = deduplicate(notifications)
+    suspend fun prepareContext(
+        notifications: List<NotificationRecord>, 
+        maxTokens: Int = 4096,
+        query: String? = null
+    ): List<DocumentChunk> {
+        val deduplicated = deduplicate(notifications)
         var tokenCount = 0
-        val selectedChunks = mutableListOf<DocumentChunk>()
+        val allChunks = mutableListOf<DocumentChunk>()
 
-        // Sort by priority and recency
-        uniqueMap.values
-            .sortedByDescending { it.timestamp }
-            .sortedByDescending { NotificationIntelligence.analyze(it.appName, it.title, it.content).priority }
-            .forEach { notif ->
-                val text = "[${notif.appName}] ${notif.title}: ${notif.content}"
-                val estimatedTokens = (text.length / 4) + 10
+        deduplicated.values.forEach { notif ->
+            val intel = NotificationIntelligence.analyze(notif.appName, notif.title, notif.content)
+            val text = "[${notif.appName}] ${notif.title}: ${notif.content}"
+            allChunks.add(
+                DocumentChunk(
+                    id = notif.id.toString(),
+                    rawText = text,
+                    cleanText = notif.content,
+                    embedding = embeddingService.getEmbedding(text),
+                    appName = notif.appName,
+                    timestamp = notif.timestamp,
+                    priorityScore = intel.priority,
+                    isOtp = intel.isOtp,
+                    isSpam = intel.isSpam,
+                    isUrgent = intel.isUrgent,
+                    category = intel.category,
+                    reasoning = intel.reasoning
+                )
+            )
+        }
+
+        // Apply Reranking if query is provided
+        if (query != null) {
+            val queryEmbedding = embeddingService.getEmbedding(query)
+            allChunks.onEach { chunk ->
+                val semanticSim = cosineSimilarity(queryEmbedding, chunk.embedding)
+                // Hybrid Score: 60% Semantic, 20% Urgency, 10% Recency, 10% App Priority
+                val ageHours = (System.currentTimeMillis() - chunk.timestamp).toFloat() / (1000 * 60 * 60)
+                val recencyScore = (1.0f / (1.0f + ageHours)).coerceIn(0f, 1f)
                 
-                if (tokenCount + estimatedTokens <= maxTokens) {
-                    val intel = NotificationIntelligence.analyze(notif.appName, notif.title, notif.content)
-                    selectedChunks.add(
-                        DocumentChunk(
-                            id = notif.id.toString(),
-                            rawText = text,
-                            cleanText = notif.content,
-                            embedding = embeddingService.getEmbedding(text),
-                            appName = notif.appName,
-                            timestamp = notif.timestamp,
-                            priorityScore = intel.priority,
-                            isOtp = intel.isOtp,
-                            isSpam = intel.isSpam,
-                            isUrgent = intel.isUrgent,
-                            category = intel.category
-                        )
-                    )
-                    tokenCount += estimatedTokens
-                }
+                chunk.retrievalScore = (semanticSim * 0.6f) + (chunk.priorityScore * 0.2f) + (recencyScore * 0.2f)
             }
-        return selectedChunks
+        } else {
+            // Default: Importance and Recency
+            allChunks.onEach { chunk ->
+                val ageHours = (System.currentTimeMillis() - chunk.timestamp).toFloat() / (1000 * 60 * 60)
+                val recencyScore = (1.0f / (1.0f + ageHours)).coerceIn(0f, 1f)
+                chunk.retrievalScore = (chunk.priorityScore * 0.7f) + (recencyScore * 0.3f)
+            }
+        }
+
+        val result = mutableListOf<DocumentChunk>()
+        allChunks.sortedByDescending { it.retrievalScore }.forEach { chunk ->
+            val estimatedTokens = (chunk.rawText.length / 4) + 12
+            if (tokenCount + estimatedTokens <= maxTokens) {
+                result.add(chunk)
+                tokenCount += estimatedTokens
+            }
+        }
+        
+        return result
     }
 
     private fun deduplicate(notifications: List<NotificationRecord>): Map<String, NotificationRecord> {
         val map = mutableMapOf<String, NotificationRecord>()
-        notifications.forEach { notif ->
-            val key = "${notif.appName}|${notif.content.take(30)}"
-            val existing = map[key]
-            if (existing == null || existing.timestamp < notif.timestamp) {
+        notifications.sortedByDescending { it.timestamp }.forEach { notif ->
+            // Use a fuzzy key for deduplication (AppName + start of content)
+            val key = "${notif.appName}|${notif.content.take(40).lowercase().trim()}"
+            if (!map.containsKey(key)) {
                 map[key] = notif
             }
         }
@@ -96,3 +123,10 @@ class RAGManager(private val embeddingService: EmbeddingService) {
         return if (nA > 0f && nB > 0f) dot / (sqrt(nA) * sqrt(nB)) else 0f
     }
 }
+
+data class SemanticCluster(
+    val topicName: String,
+    val priority: String,
+    val priorityColor: String, // Hex
+    val chunks: List<DocumentChunk>
+)

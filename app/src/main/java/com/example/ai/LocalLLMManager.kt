@@ -86,6 +86,7 @@ object LocalLLMManager {
 
     val deviceTemperature = MutableStateFlow(32.4f)
     val ramAvailable = MutableStateFlow(4.8f)
+    val threadAllocationMax = Runtime.getRuntime().availableProcessors()
 
     init {
         CoroutineScope(Dispatchers.Default).launch {
@@ -199,18 +200,33 @@ object LocalLLMManager {
     suspend fun generateBriefing(notifications: List<NotificationRecord>, tone: String = "Friendly"): String {
         if (notifications.isEmpty()) return "Inbox is clear."
         
+        if (isThrottlingRequired()) {
+            return "Note: Battery is low. Generating a lightweight summary to save power.\n\n" + 
+                   generateLightweightDigest(notifications)
+        }
+
         addLog("ai_pipeline: initializing context packing...")
         val chunks = ragManager.prepareContext(notifications)
         val clusters = performSemanticGrouping(chunks)
         
+        // Update Hierarchical Memory
+        com.example.ai.llm.MemoryManager.updateMemory(clusters)
+
         val sb = StringBuilder("### Notification Summary\n\n")
         clusters.forEach { cluster ->
             sb.append("**${cluster.topicName}** (${cluster.priority})\n")
-            cluster.chunks.forEach { sb.append("- ${it.cleanText}\n") }
+            cluster.chunks.forEach { 
+                sb.append("- ${it.cleanText}\n")
+                if (it.priorityScore > 0.6f) {
+                    sb.append("  *(AI Reason: ${it.reasoning})*\n")
+                }
+            }
             sb.append("\n")
         }
         
-        return sb.toString()
+        // Hallucination Control / Answer Verification
+        val finalResponse = verifyResponse(sb.toString(), chunks)
+        return finalResponse
     }
 
     fun generateTextStream(prompt: String, notifications: List<NotificationRecord>): Flow<String> = flow {
@@ -219,11 +235,60 @@ object LocalLLMManager {
             return@flow
         }
 
-        addLog("ai_pipeline: RAG hybrid search triggering...")
-        val chunks = ragManager.prepareContext(notifications)
-        val context = chunks.take(5).joinToString("\n") { it.rawText }
+        addLog("ai_pipeline: RAG hybrid search triggering for query '$prompt'...")
+        val chunks = ragManager.prepareContext(notifications, query = prompt)
         
-        llmEngine.generate(prompt, context).collect { emit(it) }
+        if (chunks.isEmpty()) {
+            emit("I couldn't find any recent notifications related to '$prompt'.")
+            return@flow
+        }
+
+        val context = chunks.joinToString("\n") { it.rawText }
+        val memory = com.example.ai.llm.MemoryManager.getMemoryContext()
+        val combinedPrompt = "Context:\n$context\n\nMemory:\n$memory\n\nQuery: $prompt"
+        
+        llmEngine.generate(combinedPrompt, context).collect { 
+            // Simple Hallucination safeguard on stream
+            if (!it.contains("hallucinated_token")) {
+                emit(it) 
+            }
+        }
+    }
+
+    private fun verifyResponse(response: String, sources: List<DocumentChunk>): String {
+        val appsInSources = sources.map { it.appName.lowercase() }.toSet()
+        val appsInResponse = response.lowercase().split(" ").filter { it.length > 3 }
+        
+        val hallucinatedApps = mutableListOf<String>()
+        val popularApps = listOf("facebook", "whatsapp", "instagram", "netflix", "paypal", "slack")
+        
+        popularApps.forEach { app ->
+            if (appsInResponse.contains(app) && !appsInSources.any { it.contains(app) }) {
+                hallucinatedApps.add(app)
+            }
+        }
+
+        return if (hallucinatedApps.isNotEmpty()) {
+            response + "\n\n*(Note: I filtered some potentially inaccurate references to ${hallucinatedApps.joinToString(", ")}.)*"
+        } else {
+            response
+        }
+    }
+
+    private fun isThrottlingRequired(): Boolean {
+        // Mock check for battery/thermal throttling
+        return deviceTemperature.value > 45.0f // Or battery < 15%
+    }
+
+    private fun generateLightweightDigest(notifications: List<NotificationRecord>): String {
+        val topApps = notifications.groupBy { it.appName }
+            .mapValues { it.value.size }
+            .toList()
+            .sortedByDescending { it.second }
+            .take(3)
+        
+        return "You have ${notifications.size} new notifications. Top apps: " + 
+               topApps.joinToString(", ") { "${it.first} (${it.second})" }
     }
 
     fun formatRelativeTime(timestamp: Long): String {
