@@ -40,6 +40,8 @@ firebaseBom = "34.12.0"
 secretsGradlePlugin = "2.0.1"
 kotlinxSerializationJson = "1.7.3"
 retrofitConverterKotlinxSerialization = "1.0.0"
+biometric = "1.1.0"
+fragment = "1.8.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -91,6 +93,8 @@ firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.r
 firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version = "2.12.0" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

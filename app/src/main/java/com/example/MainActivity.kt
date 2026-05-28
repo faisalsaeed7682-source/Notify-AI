@@ -11,14 +11,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.fragment.app.FragmentActivity
+import androidx.biometric.BiometricPrompt
+import androidx.biometric.BiometricManager
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import android.widget.Toast
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import com.example.ui.NavigationApp
 import com.example.ui.screens.DashboardViewModelFactory
 import com.example.ui.screens.ChatViewModelFactory
@@ -28,8 +42,23 @@ import com.example.ui.screens.SettingsRepository
 import com.example.ui.screens.SettingsViewModel
 import com.example.ui.screens.DiHelper
 import com.example.ui.theme.MyApplicationTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -41,9 +70,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialize Local AI model weights persistence from storage
-        com.example.ai.LocalLLMManager.initialize(this)
-
         val repository = DiHelper.getRepository(this)
         val settingsRepository = DiHelper.getSettingsRepository(this)
         val settingsViewModel = SettingsViewModel(settingsRepository)
@@ -51,10 +77,19 @@ class MainActivity : ComponentActivity() {
         val chatViewModel = ViewModelProvider(this, ChatViewModelFactory(repository, settingsRepository))[ChatViewModel::class.java]
 
         setContent {
-            val isDarkMode by settingsViewModel.isDarkMode.collectAsStateWithLifecycle()
+            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+
+            val isDarkTheme = when(themeMode) {
+                1 -> false
+                2 -> true
+                else -> isSystemInDarkTheme()
+            }
             
-            MyApplicationTheme(darkTheme = isDarkMode) {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            MyApplicationTheme(themeMode = themeMode) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.Transparent
+                ) {
                     NavigationApp(
                         dashboardViewModel = dashboardViewModel,
                         chatViewModel = chatViewModel,

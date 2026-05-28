@@ -30,7 +30,7 @@ class AppDetailsViewModel(
     
     fun deleteNotification(id: Int) {
         viewModelScope.launch {
-            repository.archive(id)
+            repository.moveToTrash(id)
         }
     }
     
@@ -43,6 +43,12 @@ class AppDetailsViewModel(
     fun blockApp() {
         viewModelScope.launch {
             repository.blockApp(packageName)
+        }
+    }
+
+    fun clearAllForApp() {
+        viewModelScope.launch {
+            repository.deleteApp(packageName)
         }
     }
     

@@ -20,7 +20,7 @@ object NotificationIntelligence {
         var reason = "Normal notification."
 
         val isSpam = isSpam(text)
-        val isOtp = isOtp(text, content)
+        val isOtp = false
         val isUrgent = isUrgent(text)
         val isFinancial = isFinancial(text)
 
@@ -36,13 +36,8 @@ object NotificationIntelligence {
             score += 0.45f
             reason = "Contains urgent time-sensitive keywords."
         }
-        if (isOtp) {
-            score = 0.95f
-            reason = "Critical authentication code detected."
-        }
         
         val category = when {
-            isOtp -> "Security"
             isSpam -> "Promotional"
             isFinancial -> "Finance"
             text.contains("whatsapp") || text.contains("chat") || text.contains("messenger") -> "Social"
@@ -68,9 +63,7 @@ object NotificationIntelligence {
     }
 
     private fun isOtp(text: String, content: String): Boolean {
-        val regexOtp = Regex("(?i)\\b([A-Z0-9]{1,4}-[A-Z0-9]{3,8})\\b|\\b(\\d{4,8})\\b")
-        val securityKeywords = listOf("code", "otp", "verify", "login", "mfa", "2fa", "authentication", "password")
-        return regexOtp.containsMatchIn(content) && securityKeywords.any { text.contains(it) }
+        return false
     }
 
     private fun isUrgent(text: String): Boolean {
@@ -87,7 +80,6 @@ object NotificationIntelligence {
         val tags = mutableListOf<String>()
         if (text.contains("meeting") || text.contains("zoom") || text.contains("teams")) tags.add("Meeting")
         if (text.contains("deadline") || text.contains("due")) tags.add("Deadline")
-        if (text.contains("otp") || text.contains("code")) tags.add("Verification")
         return tags
     }
 }

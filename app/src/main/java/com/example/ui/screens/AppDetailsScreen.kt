@@ -3,12 +3,20 @@ package com.example.ui.screens
 import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +36,13 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import com.example.service.ReplyCache
 
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.example.ui.components.NotificationSimpleCard
+import com.example.ui.components.ActivityGraph
+
+import com.example.util.IconProvider
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppDetailsScreen(
@@ -36,16 +51,70 @@ fun AppDetailsScreen(
     onBack: () -> Unit
 ) {
     val notifications by viewModel.notifications.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    
+    val appIcon = remember(notifications) {
+        val pkg = notifications.firstOrNull()?.packageName
+        if (pkg != null) {
+            IconProvider.getAppIcon(context, pkg)
+        } else null
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(appName, fontWeight = FontWeight.Bold) },
+            LargeTopAppBar(
+                title = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (appIcon != null) {
+                            Image(bitmap = appIcon, contentDescription = null, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
+                            Spacer(modifier = Modifier.width(16.dp))
+                        }
+                        Column {
+                            Text(appName, fontWeight = FontWeight.Black)
+                            Text("${notifications.size} Messages", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                actions = {
+                    var showMenu by remember { mutableStateOf(false) }
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = "Options")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Clear All App Alerts", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.clearAllForApp()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Block App Notifications", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Rounded.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.blockApp()
+                                onBack()
+                            }
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
+                )
             )
         }
     ) { padding ->
@@ -54,19 +123,72 @@ fun AppDetailsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(notifications) { record ->
-                ChatMessageItem(
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.2f)),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text("Session Activity", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ActivityGraph(notifications = notifications)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("${notifications.size}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                                Text("Alerts", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                val latest = notifications.firstOrNull()?.timestamp ?: 0L
+                                Text(if (latest > 0) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(latest)) else "--:--", 
+                                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                                Text("Latest", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+            item { 
+                Text("Message Timeline", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+            }
+            items(notifications, key = { it.id }) { record ->
+                NotificationSimpleCard(
                     record = record,
-                    onDelete = { viewModel.deleteNotification(it) },
-                    onArchive = { viewModel.archiveNotification(it) },
-                    onSpam = { viewModel.markSpam(it) },
-                    onBlock = { viewModel.blockApp() },
-                    onStar = { viewModel.toggleStar(it) },
-                    onUpdateCategory = { id, cat -> viewModel.updateCategory(id, cat) }
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        try {
+                            val intent = context.packageManager.getLaunchIntentForPackage(record.packageName)
+                            if (intent != null) context.startActivity(intent)
+                        } catch (e: Exception) {}
+                    },
+                    onDelete = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.deleteNotification(record.id) 
+                    },
+                    onArchive = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.archiveNotification(record.id) 
+                    },
+                    onStar = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.toggleStar(record.id) 
+                    },
+                    onBlock = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.blockApp() 
+                    },
+                    onPin = { /* Not in this screen */ },
+                    onImportant = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.updateCategory(record.id, "important") 
+                    },
+                    onRemind = { /* Not in this screen */ }
                 )
             }
+            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
     }
 }

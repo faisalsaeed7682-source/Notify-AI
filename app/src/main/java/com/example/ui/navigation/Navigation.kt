@@ -21,4 +21,22 @@ object AppCategoriesRoute
 object TrashRoute
 
 @Serializable
+object TimelineRoute
+
+@Serializable
+object StarredRoute
+
+@Serializable
+object ArchivedRoute
+
+@Serializable
+object ImportantRoute
+
+@Serializable
+object LabelsRoute
+
+@Serializable
+object AnalyticsRoute
+
+@Serializable
 data class AppDetailsRoute(val packageName: String, val appName: String)

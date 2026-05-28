@@ -88,6 +88,18 @@ class AppCategoriesViewModel(private val repository: com.example.data.repository
             }
         }
     }
+
+    fun blockApp(packageName: String) {
+        viewModelScope.launch {
+            repository.blockApp(packageName)
+        }
+    }
+
+    fun deleteAppNotifications(packageName: String) {
+        viewModelScope.launch {
+            repository.deleteApp(packageName)
+        }
+    }
 }
 
 class AppCategoriesViewModelFactory(private val repository: com.example.data.repository.NotificationRepository, private val context: Context) : ViewModelProvider.Factory {
@@ -160,9 +172,11 @@ fun AppCategoriesScreen(viewModel: AppCategoriesViewModel, onBack: () -> Unit) {
         if (selectedApp != null) {
             AlertDialog(
                 onDismissRequest = { selectedApp = null },
-                title = { Text("Set category for ${selectedApp?.appName}") },
+                title = { Text("Manage App: ${selectedApp?.appName}", fontWeight = FontWeight.Bold) },
                 text = {
                     Column {
+                        Text("Category Selection", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
                         categories.forEach { cat ->
                             Row(
                                 modifier = Modifier
@@ -171,12 +185,41 @@ fun AppCategoriesScreen(viewModel: AppCategoriesViewModel, onBack: () -> Unit) {
                                         viewModel.updateCategory(selectedApp!!.packageName, cat)
                                         selectedApp = null
                                     }
-                                    .padding(vertical = 12.dp),
+                                    .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(selected = selectedApp?.currentCategory == cat, onClick = null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(cat, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        Text("App Actions", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.blockApp(selectedApp!!.packageName)
+                                    selectedApp = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Block App")
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.deleteAppNotifications(selectedApp!!.packageName)
+                                    selectedApp = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Delete Data")
                             }
                         }
                     }

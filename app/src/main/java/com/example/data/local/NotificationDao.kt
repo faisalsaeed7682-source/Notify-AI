@@ -8,13 +8,22 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NotificationDao {
-    @Query("SELECT * FROM notifications WHERE packageName NOT IN (SELECT packageName FROM blocked_apps) AND NOT isSpam AND NOT isArchived ORDER BY timestamp DESC")
+    @Query("SELECT * FROM notifications WHERE packageName NOT IN (SELECT packageName FROM blocked_apps) AND NOT isSpam AND NOT isArchived AND NOT isTrash ORDER BY isPinned DESC, timestamp DESC")
     fun getAllNotifications(): Flow<List<NotificationRecord>>
-    
-    @Query("SELECT * FROM notifications WHERE packageName = :packageName AND packageName NOT IN (SELECT packageName FROM blocked_apps) AND NOT isSpam AND NOT isArchived ORDER BY timestamp ASC")
-    fun getNotificationsForApp(packageName: String): Flow<List<NotificationRecord>>
 
-    @Query("SELECT * FROM notifications WHERE timestamp >= :since ORDER BY timestamp DESC")
+    @Query("SELECT * FROM notifications WHERE isTrash = 1 ORDER BY timestamp DESC")
+    fun getTrashNotifications(): Flow<List<NotificationRecord>>
+
+    @Query("SELECT * FROM notifications WHERE isArchived = 1 AND NOT isTrash ORDER BY timestamp DESC")
+    fun getArchivedNotifications(): Flow<List<NotificationRecord>>
+
+    @Query("SELECT * FROM notifications WHERE isStarred = 1 AND NOT isTrash ORDER BY timestamp DESC")
+    fun getStarredNotifications(): Flow<List<NotificationRecord>>
+
+    @Query("SELECT * FROM notifications WHERE isImportant = 1 AND NOT isTrash ORDER BY timestamp DESC")
+    fun getImportantNotifications(): Flow<List<NotificationRecord>>
+
+    @Query("SELECT * FROM notifications WHERE timestamp >= :since AND NOT isTrash ORDER BY timestamp DESC")
     fun getRecentNotifications(since: Long): Flow<List<NotificationRecord>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -22,6 +31,18 @@ interface NotificationDao {
 
     @Query("UPDATE notifications SET isArchived = 1 WHERE id = :id")
     suspend fun archiveNotification(id: Int)
+
+    @Query("UPDATE notifications SET isTrash = 1 WHERE id = :id")
+    suspend fun moveToTrash(id: Int)
+
+    @Query("UPDATE notifications SET isPinned = CASE WHEN isPinned = 1 THEN 0 ELSE 1 END WHERE id = :id")
+    suspend fun togglePin(id: Int)
+
+    @Query("UPDATE notifications SET isImportant = CASE WHEN isImportant = 1 THEN 0 ELSE 1 END WHERE id = :id")
+    suspend fun toggleImportant(id: Int)
+
+    @Query("UPDATE notifications SET reminderTimestamp = :timestamp WHERE id = :id")
+    suspend fun setReminder(id: Int, timestamp: Long?)
     
     @Query("UPDATE notifications SET isArchived = 1 WHERE packageName = :packageName")
     suspend fun archiveAllForApp(packageName: String)
@@ -65,8 +86,8 @@ interface NotificationDao {
     @Query("UPDATE notifications SET category = :category WHERE packageName = :packageName")
     suspend fun updateCategoryForApp(packageName: String, category: String)
 
-    @Query("DELETE FROM notifications WHERE packageName = :packageName")
-    suspend fun deleteAppNotifications(packageName: String)
+    @Query("UPDATE notifications SET isTrash = 1 WHERE packageName = :packageName")
+    suspend fun moveAppNotificationsToTrash(packageName: String)
     
     @Query("UPDATE notifications SET isStarred = CASE WHEN isStarred = 1 THEN 0 ELSE 1 END WHERE id = :id")
     suspend fun toggleStar(id: Int)
@@ -77,6 +98,9 @@ interface NotificationDao {
     @Query("UPDATE notifications SET importanceScore = :score WHERE id = :id")
     suspend fun updateImportance(id: Int, score: Float)
 
+    @Query("DELETE FROM notifications WHERE groupKey = 'mock_group'")
+    suspend fun deleteMocks()
+
     @Query("DELETE FROM notifications WHERE id = :id")
     suspend fun deleteNotificationById(id: Int)
     
@@ -86,12 +110,33 @@ interface NotificationDao {
     @Query("DELETE FROM notifications WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
     
-    @Query("DELETE FROM notifications WHERE isArchived = 1 OR isSpam = 1 OR category = 'spam'")
+    @Query("DELETE FROM notifications WHERE isTrash = 1")
     suspend fun emptyTrash()
 
-    @Query("UPDATE notifications SET isArchived = 0, isSpam = 0 WHERE isArchived = 1 OR isSpam = 1 OR category = 'spam'")
+    @Query("UPDATE notifications SET isTrash = 0 WHERE isTrash = 1")
     suspend fun restoreAllFromTrash()
 
-    @Query("UPDATE notifications SET isArchived = 0, isSpam = 0 WHERE id = :id")
+    @Query("SELECT * FROM labels ORDER BY name ASC")
+    fun getAllLabels(): Flow<List<Label>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLabel(label: Label)
+
+    @Query("DELETE FROM labels WHERE id = :id")
+    suspend fun deleteLabel(id: Int)
+
+    @Query("UPDATE notifications SET labelId = :labelId WHERE id = :id")
+    suspend fun setNotificationLabel(id: Int, labelId: String?)
+
+    @Query("UPDATE notifications SET isArchived = 0 WHERE id = :id")
+    suspend fun unarchiveNotification(id: Int)
+
+    @Query("SELECT * FROM notifications WHERE packageName = :packageName ORDER BY timestamp DESC")
+    fun getNotificationsForApp(packageName: String): Flow<List<NotificationRecord>>
+
+    @Query("SELECT * FROM notifications ORDER BY timestamp DESC")
+    fun getFullHistoryStream(): Flow<List<NotificationRecord>>
+
+    @Query("UPDATE notifications SET isTrash = 0 WHERE id = :id")
     suspend fun restoreNotification(id: Int)
 }

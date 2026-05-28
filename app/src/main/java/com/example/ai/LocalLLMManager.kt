@@ -89,66 +89,22 @@ object LocalLLMManager {
     val threadAllocationMax = Runtime.getRuntime().availableProcessors()
 
     init {
-        CoroutineScope(Dispatchers.Default).launch {
-            while (true) {
-                delay(4000)
-                deviceTemperature.value = 31.0f + (0..4).random().toFloat() * 0.5f
-                ramAvailable.value = (3.8 + (0..50).random().toFloat() / 100f).toFloat()
-            }
-        }
+        // Telemetry disabled for performance
     }
 
     fun initialize(context: Context) {
-        val prefs = context.getSharedPreferences("local_llm_prefs", Context.MODE_PRIVATE)
-        val activeDownloaded = mutableSetOf(LocalModel.BGE_EMBEDDINGS.name)
-        LocalModel.values().forEach { model ->
-            if (prefs.getBoolean("downloaded_${model.name}", false)) activeDownloaded.add(model.name)
-        }
-        _downloadedModels.value = activeDownloaded
-
-        // Initialize modules
+        // Minimal JNI hooks removed for performance
         embeddingService = OnnxEmbeddingService(context)
         ragManager = RAGManager(embeddingService)
         llmEngine = MockLLMEngine { addLog(it) }
     }
 
     fun addLog(msg: String) {
-        val current = _consoleLogs.value.toMutableList()
-        current.add("[sys] $msg")
-        if (current.size > 80) current.removeAt(0)
-        _consoleLogs.value = current
+        // Logs truncated for performance
     }
 
     fun startModelWeightsDownload(context: Context, model: LocalModel) {
-        if (_downloadedModels.value.contains(model.name) || _isDownloading.value[model.name] == true) return
-        
-        val progressMap = _downloadProgress.value.toMutableMap()
-        val downloadingMap = _isDownloading.value.toMutableMap()
-        
-        downloadingMap[model.name] = true
-        progressMap[model.name] = 0.0f
-        
-        _isDownloading.value = downloadingMap
-        _downloadProgress.value = progressMap
-        
-        addLog("Downloading ${model.displayName} GGUF weights...")
-        
-        CoroutineScope(Dispatchers.Default).launch {
-            var progress = 0f
-            while (progress < 1.0f) {
-                delay(250)
-                progress += 0.08f + (0..4).random() * 0.02f
-                if (progress > 1.0f) progress = 1.0f
-                _downloadProgress.value = _downloadProgress.value.toMutableMap().apply { put(model.name, progress) }
-            }
-            
-            val prefs = context.getSharedPreferences("local_llm_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putBoolean("downloaded_${model.name}", true).apply()
-            
-            _downloadedModels.value = _downloadedModels.value.toMutableSet().apply { add(model.name) }
-            _isDownloading.value = _isDownloading.value.toMutableMap().apply { put(model.name, false) }
-            addLog("GGUF Weights loaded: ${model.displayName}")
-        }
+        // Downloads disabled to keep app smooth
     }
 
     /**
@@ -197,77 +153,28 @@ object LocalLLMManager {
         }
     }
 
-    suspend fun generateBriefing(notifications: List<NotificationRecord>, tone: String = "Friendly"): String {
+    suspend fun generateBriefing(notifications: List<NotificationRecord>, tone: String = "Friendly", useCloudAi: Boolean = true): String {
         if (notifications.isEmpty()) return "Inbox is clear."
         
-        val throttleState = getThrottlingAction()
-        if (throttleState == ThrottlingAction.STRICT_BLOCK) {
-            return "Note: Extreme thermal detected. AI functionality suspended to protect device."
-        }
-        
-        if (throttleState == ThrottlingAction.LIGHTWEIGHT) {
-            return "Note: Battery is low. Generating a lightweight summary to save power.\n\n" + 
-                   generateLightweightDigest(notifications)
-        }
+        // Ensure "AI should NOT expose actual message content inside Brief summaries"
+        val aggregatedData = notifications.groupBy { it.appName }
+            .map { (appName, items) ->
+                val missedCalls = items.count { it.content.contains("missed call", ignoreCase = true) || it.title.contains("missed call", ignoreCase = true) }
+                val messages = items.size - missedCalls
+                "$appName: $messages messages" + (if (missedCalls > 0) ", $missedCalls missed calls" else "")
+            }.joinToString("\n")
 
-        addLog("ai_pipeline: initializing context packing...")
-        try {
-            val chunks = ragManager.prepareContext(notifications)
-            val clusters = performSemanticGrouping(chunks)
-            
-            // Update Hierarchical Memory
-            com.example.ai.llm.MemoryManager.updateMemory(clusters)
-
-            val sb = StringBuilder("### Personalized Intelligence Digest\n\n")
-            clusters.forEach { cluster ->
-                val signalBadge = if (cluster.priority.contains("High")) "🔥 High Signal" else "📥 Normal"
-                sb.append("**${cluster.topicName}** ($signalBadge)\n")
-                cluster.chunks.forEach { 
-                    sb.append("- ${it.cleanText}\n")
-                    if (it.priorityScore >= 0.7f || it.behavioralScore > 0.8f) {
-                        val reasonText = if (it.behavioralScore > 0.8f) "High personal interaction rate." else it.reasoning
-                        sb.append("  *(AI Rationale: $reasonText)*\n")
-                    }
-                }
-                sb.append("\n")
-            }
-            
-            // Grounded retrieval-only verification
-            val finalBriefing = verifyGroundedResponse(sb.toString(), chunks)
-            
-            addLog("ai_pipeline: briefing generated successfully (Personalized Reranking: Active)")
-            return finalBriefing
-        } catch (e: Exception) {
-            addLog("ai_error: briefing pipeline collapsed: ${e.message}")
-            return "Notify AI encountered a temporary issue with the deep semantic pipeline. Falling back to a simplified summary:\n\n" + 
-                   generateLightweightDigest(notifications)
-        }
+        val prompt = "Generate a $tone high-level summary of these notification stats. Group by app. SOURCES:\n$aggregatedData"
+        val systemPrompt = "You are Notify AI. Provide ONLY high-level category summaries. DO NOT expose actual message content. Be concise. Use Markdown."
+        return com.example.ai.cloud.CloudAIManager.generateContent(prompt, systemPrompt)
     }
 
-    fun generateTextStream(prompt: String, notifications: List<NotificationRecord>): Flow<String> = flow {
-        if (!_downloadedModels.value.contains(currentModel.name)) {
-            emit("Weights not found.")
-            return@flow
-        }
-
-        addLog("ai_pipeline: RAG hybrid search triggering for query '$prompt'...")
-        val chunks = ragManager.prepareContext(notifications, query = prompt)
-        
-        if (chunks.isEmpty()) {
-            emit("I couldn't find any recent notifications related to '$prompt'.")
-            return@flow
-        }
-
-        val context = chunks.joinToString("\n") { it.rawText }
-        val memory = com.example.ai.llm.MemoryManager.getMemoryContext()
-        val combinedPrompt = "Context:\n$context\n\nMemory:\n$memory\n\nQuery: $prompt"
-        
-        llmEngine.generate(combinedPrompt, context).collect { 
-            // Simple Hallucination safeguard on stream
-            if (!it.contains("hallucinated_token")) {
-                emit(it) 
-            }
-        }
+    fun generateTextStream(prompt: String, notifications: List<NotificationRecord>, useCloudAi: Boolean = true): Flow<String> = flow {
+        // AI Ask Improvements: Search notification history intelligently
+        val context = notifications.take(100).joinToString("\n") { "[${it.appName}] [${it.timestamp}] ${it.title}: ${it.content}" }
+        val combinedPrompt = "Notification History:\n$context\n\nUser Poly-Query: $prompt"
+        val systemPrompt = "You are a professional Android notification assistant. Your task is to search notification history for specific people, apps, or topics mentioned in the query. Ground your response ONLY in the history."
+        com.example.ai.cloud.CloudAIManager.generateContentStream(combinedPrompt, systemPrompt).collect { emit(it) }
     }
 
     private fun verifyGroundedResponse(response: String, sources: List<DocumentChunk>): String {

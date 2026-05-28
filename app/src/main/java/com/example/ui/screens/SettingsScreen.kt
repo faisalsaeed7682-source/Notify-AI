@@ -34,11 +34,17 @@ fun SettingsScreen(
     viewModel: SettingsViewModel, 
     onNavigateToBlockedApps: () -> Unit,
     onNavigateToAppCategories: () -> Unit,
-    onNavigateToTrash: () -> Unit
+    onNavigateToTrash: () -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToStarred: () -> Unit,
+    onNavigateToArchived: () -> Unit,
+    onNavigateToImportant: () -> Unit,
+    onNavigateToLabels: () -> Unit
 ) {
-    val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
-    val isSecure by viewModel.isSecure.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val useCloudAi by viewModel.useCloudAi.collectAsStateWithLifecycle()
     val autoDeleteDays by viewModel.autoDeleteDays.collectAsStateWithLifecycle()
+
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -47,16 +53,13 @@ fun SettingsScreen(
     var showAutoDeleteDialog by remember { mutableStateOf(false) }
     val autoDeleteOptions = listOf(0 to "Never", 1 to "1 Day", 7 to "1 Week", 30 to "1 Month", 365 to "1 Year")
 
-    // Local AI Settings States
-    val currentModel by com.example.ai.LocalLLMManager.currentModelFlow.collectAsStateWithLifecycle()
-    val downloadedModels by com.example.ai.LocalLLMManager.downloadedModels.collectAsStateWithLifecycle()
-    val downloadProgress by com.example.ai.LocalLLMManager.downloadProgress.collectAsStateWithLifecycle()
-    val isDownloading by com.example.ai.LocalLLMManager.isDownloading.collectAsStateWithLifecycle()
-    val consoleLogs by com.example.ai.LocalLLMManager.consoleLogs.collectAsStateWithLifecycle()
-    val deviceTemp by com.example.ai.LocalLLMManager.deviceTemperature.collectAsStateWithLifecycle()
-    val ramAvailable by com.example.ai.LocalLLMManager.ramAvailable.collectAsStateWithLifecycle()
-
-    var showAiControlCenter by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    val themeOptions = listOf(
+        0 to "System Default",
+        1 to "Light Mode",
+        2 to "Dark Mode",
+        4 to "Glass Ambient"
+    )
 
     Scaffold(
         topBar = {
@@ -67,443 +70,275 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
-            SettingsItemToggle(
-                title = "Dark Mode",
-                subtitle = "Toggle dark theme application wide.",
-                checked = isDarkMode,
-                onCheckedChange = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.toggleDarkMode(it) 
-                }
-            )
+            // General Section
+            SettingsSectionHeader("General")
             
-            HorizontalDivider()
-
-            val currentAutoDeleteLabel = autoDeleteOptions.find { it.first == autoDeleteDays }?.second ?: "Never"
-            Surface(
-                onClick = { showAutoDeleteDialog = true },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Auto Delete Notifications", style = MaterialTheme.typography.titleMedium)
-                    Text("Older than: $currentAutoDeleteLabel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            // GGUF Control Center Button (Expandable)
-            Surface(
-                onClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    showAiControlCenter = !showAiControlCenter 
+            SettingsItemAction(
+                icon = Icons.Rounded.Palette,
+                title = "App Theme",
+                subtitle = when(themeMode) {
+                    0 -> "System Default"
+                    1 -> "Light Mode"
+                    2 -> "Dark Mode"
+                    4 -> "Glass Ambient"
+                    else -> "Dark Mode"
                 },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp).animateContentSize()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-                            Spacer(Modifier.width(8.dp))
-                            Text("On-Device GGUF Control Center", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiaryContainer, fontWeight = FontWeight.Bold)
-                        }
-                        Icon(
-                            imageVector = if (showAiControlCenter) Icons.Rounded.Close else Icons.Rounded.ArrowDropDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text("Configure true on-device llama.cpp hardware execution layers & parameters.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f))
-                    
-                    if (!showAiControlCenter) {
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("Model: ${currentModel.displayName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                            Text("Temp: ${"%.1f".format(deviceTemp)}°C", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                            Text("Memory: ${currentModel.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f))
-                        }
-                    }
-                }
-            }
+                onClick = { showThemeDialog = true }
+            )
 
-            // Expanded AI Control Panel
-            if (showAiControlCenter) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().animateContentSize(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        
-                        // 1. Diagnostics Board
-                        Row(
-                            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.6f), RoundedCornerShape(12.dp)).padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(horizontalAlignment = Alignment.Start) {
-                                Text("DEVICE TEMP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Text("${"%.1f".format(deviceTemp)}°C", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("AVAILABLE RAM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Text("${"%.2f".format(ramAvailable)} GB", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("CORES ALLOC", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Text("${com.example.ai.LocalLLMManager.threadsCount.collectAsState().value} / ${com.example.ai.LocalLLMManager.threadAllocationMax} Cores", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            }
-                        }
+            SettingsItemAction(
+                icon = Icons.Rounded.History,
+                title = "Notification History",
+                subtitle = "Timeline of all captured alerts",
+                onClick = onNavigateToHistory
+            )
 
-                        // 2. Hardware acceleration selection
-                        Text("1. Hardware Acceleration engine", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        var tempEngine by remember { mutableStateOf(com.example.ai.LocalLLMManager.currentEngine) }
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            com.example.ai.LocalLLMManager.EngineType.values().forEach { engine ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { 
-                                            tempEngine = engine
-                                            com.example.ai.LocalLLMManager.currentEngine = engine
-                                            com.example.ai.LocalLLMManager.addLog("Switching JNI runtime to ${engine.displayName}")
-                                        }
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(selected = tempEngine == engine, onClick = null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Column {
-                                        Text(engine.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                        Text("Maps API pointers via JNI native bridge directly into ${engine.apiLib}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                        }
+            // Notifications Section
+            SettingsSectionHeader("Smart Management")
 
-                        HorizontalDivider()
+            SettingsItemAction(
+                icon = Icons.Rounded.Star,
+                title = "Starred Notifications",
+                subtitle = "Quick access to tagged alerts",
+                onClick = onNavigateToStarred
+            )
 
-                        // 3. Models weights manager (Download System)
-                        Text("2. GGUF weights & models manager", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        com.example.ai.LocalLLMManager.LocalModel.values().forEach { model ->
-                            val downloaded = downloadedModels.contains(model.name)
-                            val downloading = isDownloading[model.name] == true
-                            val progress = downloadProgress[model.name] ?: 0.0f
-                            val memoryAlert = !com.example.ai.LocalLLMManager.checkRamCompatibility(model)
+            SettingsItemAction(
+                icon = Icons.Rounded.Archive,
+                title = "Archived Notifications",
+                subtitle = "Hidden but not forgotten",
+                onClick = onNavigateToArchived
+            )
 
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        if (downloaded) {
-                                            com.example.ai.LocalLLMManager.currentModel = model
-                                            com.example.ai.LocalLLMManager.addLog("Loaded active model pointers: ${model.displayName}")
-                                        } else if (!downloading) {
-                                            com.example.ai.LocalLLMManager.startModelWeightsDownload(context, model)
-                                        }
-                                    },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (currentModel == model) 
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) 
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                ),
-                                border = BorderStroke(
-                                    width = if (currentModel == model) 2.dp else 1.dp,
-                                    color = if (currentModel == model) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                                )
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                RadioButton(
-                                                    selected = currentModel == model,
-                                                    onClick = {
-                                                        if (downloaded) {
-                                                            com.example.ai.LocalLLMManager.currentModel = model
-                                                            com.example.ai.LocalLLMManager.addLog("Loaded active model pointers: ${model.displayName}")
-                                                        }
-                                                    },
-                                                    enabled = downloaded
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text(model.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                            }
-                                            Text("${model.params} | Size: ${model.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
+            SettingsItemAction(
+                icon = Icons.Rounded.PriorityHigh,
+                title = "Important Notifications",
+                subtitle = "AI-flagged priority alerts",
+                onClick = onNavigateToImportant
+            )
 
-                                        // Action Button
-                                        if (downloaded) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Rounded.CheckCircle, contentDescription = "Downloaded", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Ready", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                            }
-                                        } else if (downloading) {
-                                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                        } else {
-                                            Button(
-                                                onClick = { 
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    com.example.ai.LocalLLMManager.startModelWeightsDownload(context, model) 
-                                                },
-                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                                modifier = Modifier.height(28.dp)
-                                            ) {
-                                                Icon(Icons.Rounded.CloudDownload, contentDescription = "Download", modifier = Modifier.size(12.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Get GGUF", style = MaterialTheme.typography.labelSmall)
-                                            }
-                                        }
-                                    }
+            SettingsItemAction(
+                icon = Icons.Rounded.Label,
+                title = "Labels Management",
+                subtitle = "Gmail-style custom organization",
+                onClick = onNavigateToLabels
+            )
 
-                                    if (downloading) {
-                                        Spacer(Modifier.height(8.dp))
-                                        Column {
-                                            LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(4.dp))
-                                            Text("Downloading weights layers... ${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
 
-                                    if (memoryAlert) {
-                                        Spacer(Modifier.height(4.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Rounded.Warning, contentDescription = "Warning", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(12.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Low RAM (Model requires ${model.minRamRequiredGb}GB minimum)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                        }
-                                    }
-                                }
-                            }
-                        }
 
-                        HorizontalDivider()
+            // Cleanup & Privacy
+            SettingsSectionHeader("Cleanup & Privacy")
 
-                        // 4. Tokenizer & decoding parameters
-                        Text("3. Pre-Tuned Tensor Parameters", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        
-                        // Threads selection
-                        val curThreads by com.example.ai.LocalLLMManager.threadsCount.collectAsStateWithLifecycle()
-                        Column {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Inference Thread Allocation", style = MaterialTheme.typography.bodySmall)
-                                Text("$curThreads Cores", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            }
-                            Slider(
-                                value = curThreads.toFloat(),
-                                onValueChange = { com.example.ai.LocalLLMManager.threadsCount.value = it.toInt() },
-                                valueRange = 1f..com.example.ai.LocalLLMManager.threadAllocationMax.toFloat(),
-                                steps = if (com.example.ai.LocalLLMManager.threadAllocationMax > 2) com.example.ai.LocalLLMManager.threadAllocationMax - 2 else 0
-                            )
-                        }
+            SettingsItemAction(
+                icon = Icons.Rounded.Block,
+                title = "Blocked Apps",
+                subtitle = "Muted from intelligence pipeline",
+                onClick = onNavigateToBlockedApps
+            )
 
-                        // Temp selection
-                        val tempVal by com.example.ai.LocalLLMManager.temperature.collectAsStateWithLifecycle()
-                        Column {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Temperature (Sampling variability)", style = MaterialTheme.typography.bodySmall)
-                                Text("Temp: ${"%.2f".format(tempVal)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            }
-                            Slider(
-                                value = tempVal,
-                                onValueChange = { com.example.ai.LocalLLMManager.temperature.value = it },
-                                valueRange = 0.1f..1.5f
-                            )
-                        }
+            var showSwipeDialog by remember { mutableStateOf(false) }
+            val swipeLeftAction by viewModel.swipeLeftAction.collectAsStateWithLifecycle()
+            val swipeRightAction by viewModel.swipeRightAction.collectAsStateWithLifecycle()
 
-                        // Top-P Selection
-                        val topPVal by com.example.ai.LocalLLMManager.topP.collectAsStateWithLifecycle()
-                        Column {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Top-P (Nucleus cutoff value)", style = MaterialTheme.typography.bodySmall)
-                                Text("Top-P: ${"%.2f".format(topPVal)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            }
-                            Slider(
-                                value = topPVal,
-                                onValueChange = { com.example.ai.LocalLLMManager.topP.value = it },
-                                valueRange = 0.1f..1.0f
-                            )
-                        }
+            SettingsItemAction(
+                icon = Icons.Rounded.SwapHoriz,
+                title = "Swipe Gestures",
+                subtitle = "Customize left/right actions",
+                onClick = { showSwipeDialog = true }
+            )
 
-                        // Sliding window context selection
-                        val ctxSize by com.example.ai.LocalLLMManager.customContextSize.collectAsStateWithLifecycle()
-                        Column {
-                            Text("Context Window Limit Size", style = MaterialTheme.typography.bodySmall)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                                listOf(2048, 4096, 8192).forEach { size ->
-                                    FilterChip(
-                                        selected = ctxSize == size,
-                                        onClick = { com.example.ai.LocalLLMManager.customContextSize.value = size },
-                                        label = { Text("$size tokens", style = MaterialTheme.typography.labelSmall) }
-                                    )
-                                }
-                            }
-                        }
-
-                        HorizontalDivider()
-
-                        // 5. Native Log Diagnostic stdout console
-                        Text("4. Local stdout telemetry console", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp)
-                                .background(Color.Black, RoundedCornerShape(8.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        ) {
-                            val listScrollState = rememberScrollState()
-                            LaunchedEffect(consoleLogs.size) {
-                                listScrollState.animateScrollTo(listScrollState.maxValue)
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(listScrollState),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                consoleLogs.forEach { log ->
-                                    Text(
-                                        text = log,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (log.contains("error", true)) Color.Red else Color.Green,
-                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (showAutoDeleteDialog) {
+            if (showSwipeDialog) {
                 AlertDialog(
-                    onDismissRequest = { showAutoDeleteDialog = false },
-                    title = { Text("Auto-Delete Trash") },
+                    onDismissRequest = { showSwipeDialog = false },
+                    title = { Text("Swipe Gestures") },
                     text = {
                         Column {
-                            autoDeleteOptions.forEach { (days, label) ->
+                            Text("Left Swipe", style = MaterialTheme.typography.labelLarge)
+                            listOf(0 to "Delete", 1 to "Archive", 2 to "Star").forEach { (id, label) ->
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { 
-                                            viewModel.setAutoDeleteDays(days)
-                                            showAutoDeleteDialog = false
-                                        }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().clickable { viewModel.setSwipeLeftAction(id) }.padding(8.dp)
                                 ) {
-                                    RadioButton(selected = autoDeleteDays == days, onClick = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(label, style = MaterialTheme.typography.bodyLarge)
+                                    RadioButton(selected = swipeLeftAction == id, onClick = { viewModel.setSwipeLeftAction(id) })
+                                    Text(label)
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text("Right Swipe", style = MaterialTheme.typography.labelLarge)
+                            listOf(0 to "Delete", 1 to "Archive", 2 to "Star").forEach { (id, label) ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().clickable { viewModel.setSwipeRightAction(id) }.padding(8.dp)
+                                ) {
+                                    RadioButton(selected = swipeRightAction == id, onClick = { viewModel.setSwipeRightAction(id) })
+                                    Text(label)
                                 }
                             }
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { showAutoDeleteDialog = false }) { Text("Close") }
+                        TextButton(onClick = { showSwipeDialog = false }) { Text("Done") }
                     }
                 )
             }
+
+            SettingsItemAction(
+                icon = Icons.Rounded.AutoDelete,
+                title = "Auto-Delete Configuration",
+                subtitle = "Current: " + (autoDeleteOptions.find { it.first == autoDeleteDays }?.second ?: "Never"),
+                onClick = { showAutoDeleteDialog = true }
+            )
+
+            SettingsItemAction(
+                icon = Icons.Rounded.Delete,
+                title = "Trash Bin",
+                subtitle = "Recover or purge recently deleted",
+                onClick = onNavigateToTrash
+            )
+
+            // System Diagnostics
+            SettingsSectionHeader("System & About")
             
             if (!isIgnoringBattery) {
-                Surface(
-                    onClick = { 
+                SettingsItemAction(
+                    icon = Icons.Rounded.BatteryAlert,
+                    title = "Battery Optimization",
+                    subtitle = "Action required for reliability",
+                    onClick = {
                         val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                         intent.data = Uri.parse("package:${context.packageName}")
                         context.startActivity(intent)
                         isIgnoringBattery = true
-                    },
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Disable Battery Optimization", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                        Text("Android may kill the background listener. Tap to allow this app to run reliably.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha=0.8f))
                     }
-                }
+                )
             }
-            
-            Surface(
-                onClick = { onNavigateToBlockedApps() },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
+
+            SettingsItemAction(
+                icon = Icons.Rounded.Info,
+                title = "App Version",
+                subtitle = "Version 1.2.0 (Build 302)",
+                onClick = {}
+            )
+
+            // Changelog
+            Card(
+                modifier = Modifier.padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Blocked Apps", style = MaterialTheme.typography.titleMedium)
-                    Text("Manage apps whose notifications are ignored.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Recent Updates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text("• Premium Glassmorphism & Ambient Glow\n• Advanced Guided AI Search (App, Month, Keyword)\n• Filterable Timeline History & Date Presets\n• Added notification pinning & selector toggles", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            
-            Surface(
-                onClick = { onNavigateToAppCategories() },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("App Categories", style = MaterialTheme.typography.titleMedium)
-                    Text("Manually override categories for installed apps.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            
-            Surface(
-                onClick = { onNavigateToTrash() },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Trash Bin", style = MaterialTheme.typography.titleMedium)
-                    Text("View and restore deleted notifications.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            
-            HorizontalDivider()
-            Text("Suggestions & Improvements", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
-            Text("This app continuously listens for standard OS broadcasts securely in the background. It groups alerts intelligently and uses an optimized local LLM integration completely on-device to create summaries. Your data never leaves this phone.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            Spacer(Modifier.height(32.dp))
+        }
+
+        // Dialogs
+        if (showAutoDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showAutoDeleteDialog = false },
+                title = { Text("Auto-Delete") },
+                text = {
+                    Column {
+                        autoDeleteOptions.forEach { (days, label) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { 
+                                    viewModel.setAutoDeleteDays(days); showAutoDeleteDialog = false 
+                                }.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(selected = autoDeleteDays == days, onClick = null)
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(label)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        if (showThemeDialog) {
+            AlertDialog(
+                onDismissRequest = { showThemeDialog = false },
+                title = { Text("Select Theme") },
+                text = {
+                    Column {
+                        themeOptions.forEach { (mode, label) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { 
+                                    viewModel.setThemeMode(mode); showThemeDialog = false 
+                                }.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(selected = themeMode == mode, onClick = null)
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(label)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
         }
     }
 }
 
 @Composable
+fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
 fun SettingsItemToggle(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).animateContentSize(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+fun SettingsItemAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.5f))
     }
 }

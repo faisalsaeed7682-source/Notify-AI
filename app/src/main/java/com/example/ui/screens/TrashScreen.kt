@@ -4,9 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,25 +15,61 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.*
 
+import com.example.ui.components.NotificationSimpleCard
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrashScreen(
     viewModel: DashboardViewModel, 
     onBack: () -> Unit
 ) {
-    val notifications by viewModel.notifications.collectAsStateWithLifecycle()
-    val trashItems = notifications.filter { it.isArchived || it.isSpam }
+    val trashItems by viewModel.trashNotifications.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val isSelectionMode = selectedIds.isNotEmpty()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Trash Bin", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = { Text("${selectedIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Clear")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.selectAll(trashItems.map { it.id }) }) {
+                            Icon(Icons.Rounded.SelectAll, contentDescription = "Select All")
+                        }
+                        IconButton(onClick = { viewModel.restoreSelected() }) {
+                            Icon(Icons.Rounded.Restore, contentDescription = "Restore Selected")
+                        }
+                        IconButton(onClick = { viewModel.deletePermanentlySelected() }) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete Permanently", tint = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Trash Bin", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        if (trashItems.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.emptyTrash() }) {
+                                Icon(Icons.Rounded.Delete, contentDescription = "Empty Trash", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -43,24 +77,26 @@ fun TrashScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Deleted notifications are kept here before permanent removal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
             if (trashItems.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = { viewModel.restoreAllFromTrash() }) {
-                        Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Restore All")
-                    }
-                    Button(
-                        onClick = { viewModel.emptyTrash() },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                if (!isSelectionMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Empty Trash")
+                        Button(
+                            onClick = { viewModel.restoreAllFromTrash() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                        ) {
+                            Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Restore All")
+                        }
                     }
                 }
                 
@@ -69,38 +105,23 @@ fun TrashScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(trashItems) { record ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(), 
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(record.appName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    val formattedTime = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(record.timestamp))
-                                    Text(formattedTime, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(record.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(record.content, style = MaterialTheme.typography.bodyMedium)
-                                
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    TextButton(onClick = { viewModel.restoreNotification(record.id) }) {
-                                        Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Restore")
-                                    }
-                                }
-                            }
+                    items(trashItems, key = { it.id }) { record ->
+                        Box(modifier = Modifier.animateItem()) {
+                            NotificationSimpleCard(
+                                record = record,
+                                isSelected = selectedIds.contains(record.id),
+                                onClick = {
+                                    if (isSelectionMode) viewModel.toggleSelection(record.id)
+                                },
+                                onLongClick = { viewModel.toggleSelection(record.id) },
+                                onDelete = { viewModel.deletePermanently(record.id) },
+                                onArchive = { viewModel.restoreNotification(record.id) },
+                                onStar = {},
+                                onBlock = { viewModel.blockApp(record.packageName) },
+                                onPin = {},
+                                onImportant = {},
+                                onRemind = {}
+                            )
                         }
                     }
                 }
