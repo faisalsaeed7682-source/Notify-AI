@@ -46,9 +46,7 @@ class ChatViewModel(private val repository: NotificationRepository, private val 
     fun startNewChat() {
         saveCurrentSession()
         currentSessionId = java.util.UUID.randomUUID().toString()
-        _messages.value = listOf(
-            ChatMessage(text = "Hello! I am your Notification AI. I can formally analyze your alerts and provide concise summaries. How can I assist you today?", isUser = false)
-        )
+        _messages.value = emptyList()
     }
 
     private fun saveCurrentSession() {

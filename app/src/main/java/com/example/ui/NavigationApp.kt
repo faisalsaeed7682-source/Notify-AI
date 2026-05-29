@@ -81,7 +81,7 @@ fun NavigationApp(
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Rounded.ChatBubble, contentDescription = "AI Chat") },
-                    label = { Text("Ask AI") },
+                    label = { Text("AI Finder") },
                     selected = currentDestination?.route?.contains("ChatRoute") == true,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -140,8 +140,7 @@ fun NavigationApp(
                         onNavigateToHistory = { navController.navigate(com.example.ui.navigation.TimelineRoute) },
                         onNavigateToStarred = { navController.navigate(com.example.ui.navigation.StarredRoute) },
                         onNavigateToArchived = { navController.navigate(com.example.ui.navigation.ArchivedRoute) },
-                        onNavigateToImportant = { navController.navigate(com.example.ui.navigation.ImportantRoute) },
-                        onNavigateToLabels = { navController.navigate(com.example.ui.navigation.LabelsRoute) }
+                        onNavigateToImportant = { navController.navigate(com.example.ui.navigation.ImportantRoute) }
                     )
                 }
                 composable<com.example.ui.navigation.AnalyticsRoute> {
@@ -158,9 +157,6 @@ fun NavigationApp(
                 }
                 composable<com.example.ui.navigation.ImportantRoute> {
                     ImportantScreen(dashboardViewModel, onBack = { navController.popBackStack() })
-                }
-                composable<com.example.ui.navigation.LabelsRoute> {
-                    LabelsScreen(dashboardViewModel, onBack = { navController.popBackStack() })
                 }
                 composable<com.example.ui.navigation.TrashRoute> {
                     TrashScreen(dashboardViewModel, onBack = { navController.popBackStack() })

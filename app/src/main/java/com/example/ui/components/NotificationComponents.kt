@@ -21,6 +21,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.local.NotificationRecord
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -63,100 +64,92 @@ fun NotificationSimpleCard(
     var showMenuDialog by remember { mutableStateOf(false) }
 
     if (showMenuDialog) {
-        AlertDialog(
-            onDismissRequest = { showMenuDialog = false },
-            title = {
+        ModalBottomSheet(onDismissRequest = { showMenuDialog = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(
-                    text = "Notification Actions",
+                    text = "Manage Notification",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
                 )
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth()
+
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(record.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                            Spacer(Modifier.height(4.dp))
-                            Text(record.content, style = MaterialTheme.typography.bodySmall, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    val options = listOf(
-                        Triple(
-                            if (record.isStarred) "Remove Star" else "Star Notification",
-                            Icons.Rounded.Star,
-                            onStar
-                        ),
-                        Triple(
-                            if (record.isPinned) "Unpin Notification" else "Pin Notification",
-                            Icons.Rounded.PushPin,
-                            onPin
-                        ),
-                        Triple(
-                            "Archive Notification",
-                            Icons.Rounded.Archive,
-                            onArchive
-                        ),
-                        Triple(
-                            "Move to Trash",
-                            Icons.Rounded.Delete,
-                            onDelete
-                        ),
-                        Triple(
-                            "Select and Batch Action...",
-                            Icons.Rounded.CheckCircle,
-                            { onLongClick() }
-                        ),
-                        Triple(
-                            "Block ${record.appName}",
-                            Icons.Rounded.Block,
-                            onBlock
-                        )
-                    )
-
-                    options.forEach { (label, icon, action) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    showMenuDialog = false
-                                    action()
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = label,
-                                tint = if (label == "Move to Trash" || label.startsWith("Block")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (label == "Move to Trash" || label.startsWith("Block")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(record.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(Modifier.height(4.dp))
+                        Text(record.content, style = MaterialTheme.typography.bodySmall, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showMenuDialog = false }) {
-                    Text("Close")
+
+                val options = listOf(
+                    Triple(
+                        if (record.isStarred) "Remove Star" else "Star Notification",
+                        Icons.Rounded.Star,
+                        onStar
+                    ),
+                    Triple(
+                        if (record.isPinned) "Unpin Notification" else "Pin Notification",
+                        Icons.Rounded.PushPin,
+                        onPin
+                    ),
+                    Triple(
+                        "Archive Notification",
+                        Icons.Rounded.Archive,
+                        onArchive
+                    ),
+                    Triple(
+                        "Move to Trash",
+                        Icons.Rounded.Delete,
+                        onDelete
+                    ),
+                    Triple(
+                        "Select and Batch Action...",
+                        Icons.Rounded.CheckCircle,
+                        { onLongClick() }
+                    ),
+                    Triple(
+                        "Block ${record.appName}",
+                        Icons.Rounded.Block,
+                        onBlock
+                    )
+                )
+
+                options.forEach { (label, icon, action) ->
+                    ListItem(
+                        headlineContent = { Text(label, style = MaterialTheme.typography.bodyMedium) },
+                        leadingContent = { 
+                            Icon(
+                                imageVector = icon, 
+                                contentDescription = null, 
+                                tint = if (label == "Move to Trash" || label.startsWith("Block")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            ) 
+                        },
+                        colors = ListItemDefaults.colors(
+                            headlineColor = if (label == "Move to Trash" || label.startsWith("Block")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                            containerColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showMenuDialog = false
+                                action()
+                            }
+                    )
                 }
             }
-        )
+        }
     }
     
     val dismissState = rememberSwipeToDismissBoxState(
@@ -323,6 +316,24 @@ fun NotificationSimpleCard(
                         if (record.isImportant) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Icon(Icons.Rounded.PriorityHigh, contentDescription = "Important", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
+                        }
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+                        
+                        val category = if (record.appName.contains("Mail") || record.appName.contains("Gmail") || record.appName.contains("Teams")) "Work"
+                        else if (record.appName.contains("Insta") || record.appName.contains("WhatsApp") || record.appName.contains("Snap")) "Social"
+                        else "General"
+                        
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.4f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = category,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                         }
                     }
                 }

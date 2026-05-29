@@ -144,18 +144,6 @@ class ClearNotificationListenerService : NotificationListenerService() {
                 )
                 db.notificationDao().insertNotification(record)
                 Log.d("NotifyListener", "Saved notification: $appName - $title (Category: ${record.category})")
-                
-                // Cleanup old notifications
-                try {
-                    val settingsRepo = com.example.ui.screens.SettingsRepository(this@ClearNotificationListenerService)
-                    val days = settingsRepo.autoDeleteDays.first()
-                    if (days > 0) {
-                        val cutoff = System.currentTimeMillis() - days * 24L * 60 * 60 * 1000L
-                        db.notificationDao().deleteOlderThan(cutoff)
-                    }
-                } catch (e: Exception) {
-                    Log.e("NotifyListener", "Failed cleanup", e)
-                }
 
             } catch (e: Exception) {
                 Log.e("NotifyListener", "Failed to save notification", e)

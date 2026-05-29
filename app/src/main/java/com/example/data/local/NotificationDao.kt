@@ -116,18 +116,6 @@ interface NotificationDao {
     @Query("UPDATE notifications SET isTrash = 0 WHERE isTrash = 1")
     suspend fun restoreAllFromTrash()
 
-    @Query("SELECT * FROM labels ORDER BY name ASC")
-    fun getAllLabels(): Flow<List<Label>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertLabel(label: Label)
-
-    @Query("DELETE FROM labels WHERE id = :id")
-    suspend fun deleteLabel(id: Int)
-
-    @Query("UPDATE notifications SET labelId = :labelId WHERE id = :id")
-    suspend fun setNotificationLabel(id: Int, labelId: String?)
-
     @Query("UPDATE notifications SET isArchived = 0 WHERE id = :id")
     suspend fun unarchiveNotification(id: Int)
 

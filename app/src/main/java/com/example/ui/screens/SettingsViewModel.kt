@@ -23,13 +23,6 @@ class SettingsViewModel(private val settingsRepository: SettingsRepository) : Vi
             initialValue = false
         )
 
-    val autoDeleteDays: StateFlow<Int> = settingsRepository.autoDeleteDays
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0
-        )
-
     fun toggleDarkMode(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDarkMode(enabled)
@@ -67,12 +60,6 @@ class SettingsViewModel(private val settingsRepository: SettingsRepository) : Vi
 
     fun setSwipeRightAction(action: Int) {
         viewModelScope.launch { settingsRepository.setSwipeRightAction(action) }
-    }
-
-    fun setAutoDeleteDays(days: Int) {
-        viewModelScope.launch {
-            settingsRepository.setAutoDeleteDays(days)
-        }
     }
 
     val forceInAppGmail: StateFlow<Boolean> = settingsRepository.forceInAppGmail

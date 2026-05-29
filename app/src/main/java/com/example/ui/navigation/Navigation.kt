@@ -33,9 +33,6 @@ object ArchivedRoute
 object ImportantRoute
 
 @Serializable
-object LabelsRoute
-
-@Serializable
 object AnalyticsRoute
 
 @Serializable

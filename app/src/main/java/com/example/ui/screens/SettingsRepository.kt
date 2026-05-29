@@ -18,7 +18,6 @@ val Context.dataStore by preferencesDataStore(name = "settings")
 class SettingsRepository(private val context: Context) {
     private val IS_DARK_MODE = booleanPreferencesKey("is_dark_mode")
     private val USE_CLOUD_AI = booleanPreferencesKey("use_cloud_ai")
-    private val AUTO_DELETE_DAYS = intPreferencesKey("auto_delete_days")
 
     val isDarkMode: Flow<Boolean> = context.dataStore.data
         .catch { exception ->
@@ -42,18 +41,6 @@ class SettingsRepository(private val context: Context) {
         }
         .map { preferences ->
             preferences[USE_CLOUD_AI] ?: false
-        }
-
-    val autoDeleteDays: Flow<Int> = context.dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[AUTO_DELETE_DAYS] ?: 0
         }
 
     suspend fun setDarkMode(enabled: Boolean) {
@@ -98,12 +85,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemeMode(mode: Int) {
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE] = mode
-        }
-    }
-
-    suspend fun setAutoDeleteDays(days: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[AUTO_DELETE_DAYS] = days
         }
     }
 

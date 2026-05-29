@@ -1,5 +1,5 @@
 {
-  "name": "ClearNotify",
+  "name": "NotifyGuard",
   "description": "Smart notification manager with distraction insights and priority centering.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

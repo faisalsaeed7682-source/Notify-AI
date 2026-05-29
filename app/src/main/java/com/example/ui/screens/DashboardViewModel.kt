@@ -220,21 +220,6 @@ class DashboardViewModel(private val repository: NotificationRepository, private
         }
     }
 
-    val allLabels = repository.allLabels
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun insertLabel(label: com.example.data.local.Label) {
-        viewModelScope.launch {
-            repository.insertLabel(label)
-        }
-    }
-
-    fun deleteLabel(id: Int) {
-        viewModelScope.launch {
-            repository.deleteLabel(id)
-        }
-    }
-
     fun insertMockNotification(appName: String, packageName: String, title: String, content: String, category: String = "Social") {
         viewModelScope.launch {
             val record = NotificationRecord(
@@ -248,12 +233,6 @@ class DashboardViewModel(private val repository: NotificationRepository, private
                 timestamp = System.currentTimeMillis()
             )
             repository.insert(record)
-        }
-    }
-
-    fun setNotificationLabel(id: Int, labelId: String?) {
-        viewModelScope.launch {
-            repository.setNotificationLabel(id, labelId)
         }
     }
 

@@ -20,14 +20,8 @@ class ClassificationWorker(
         Log.d("ClassificationWorker", "Running background classification...")
         try {
             val repository = DiHelper.getRepository(applicationContext)
-            val settingsRepo = DiHelper.getSettingsRepository(applicationContext)
-            val deleteDays = settingsRepo.autoDeleteDays.first()
-            if (deleteDays > 0) {
-                val cutoffTimestamp = System.currentTimeMillis() - (deleteDays * 24L * 60L * 60L * 1000L)
-                repository.deleteOlderThan(cutoffTimestamp)
-            }
             
-            Log.d("ClassificationWorker", "Background classification and cleanup completed successfully.")
+            Log.d("ClassificationWorker", "Background classification completed successfully.")
             return Result.success()
         } catch (e: Exception) {
             Log.e("ClassificationWorker", "Error classifying notifications", e)

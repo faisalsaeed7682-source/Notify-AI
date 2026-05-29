@@ -101,7 +101,7 @@ fun ImportantScreen(
                             onClick = {
                                 if (isSelectionMode) viewModel.toggleSelection(record.id)
                             },
-                            onLongClick = { viewModel.toggleSelection(record.id) },
+                            onLongClick = { },
                             onDelete = { viewModel.deleteNotification(record.id) },
                             onArchive = { viewModel.archiveNotification(record.id) },
                             onStar = { viewModel.toggleStar(record.id) },

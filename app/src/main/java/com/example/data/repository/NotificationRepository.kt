@@ -10,22 +10,9 @@ class NotificationRepository(private val dao: NotificationDao) {
     val archivedNotifications: Flow<List<NotificationRecord>> = dao.getArchivedNotifications()
     val starredNotifications: Flow<List<NotificationRecord>> = dao.getStarredNotifications()
     val importantNotifications: Flow<List<NotificationRecord>> = dao.getImportantNotifications()
-    val allLabels: Flow<List<com.example.data.local.Label>> = dao.getAllLabels()
     val fullHistoryStream: Flow<List<NotificationRecord>> = dao.getFullHistoryStream()
     
     fun getRecentNotifications(since: Long): Flow<List<NotificationRecord>> = dao.getRecentNotifications(since)
-
-    suspend fun insertLabel(label: com.example.data.local.Label) {
-        dao.insertLabel(label)
-    }
-
-    suspend fun deleteLabel(id: Int) {
-        dao.deleteLabel(id)
-    }
-
-    suspend fun setNotificationLabel(id: Int, labelId: String?) {
-        dao.setNotificationLabel(id, labelId)
-    }
 
     suspend fun insert(notification: NotificationRecord) {
         dao.insertNotification(notification)

@@ -58,12 +58,12 @@ fun TimelineScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             // Timeline Filter Tabs
             ScrollableTabRow(
-                selectedTabIndex = TimeFilter.values().indexOf(timeFilter),
+                selectedTabIndex = TimeFilter.values().filter { it != TimeFilter.RANGE }.indexOf(timeFilter).coerceAtLeast(0),
                 edgePadding = 16.dp,
                 containerColor = MaterialTheme.colorScheme.background,
                 divider = {}
             ) {
-                TimeFilter.values().forEach { filter ->
+                TimeFilter.values().filter { it != TimeFilter.RANGE }.forEach { filter ->
                     Tab(
                         selected = timeFilter == filter,
                         onClick = { viewModel.updateTimeFilter(filter) },

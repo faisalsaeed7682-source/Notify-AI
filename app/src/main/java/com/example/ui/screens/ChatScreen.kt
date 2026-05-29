@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
@@ -38,11 +39,15 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.util.exportChatToPdfAndShare
+import com.example.util.simpleVerticalScrollbar
 import com.example.data.local.NotificationRecord
 import kotlinx.coroutines.launch
 
@@ -66,133 +71,8 @@ fun ChatScreen(viewModel: ChatViewModel) {
     val isDownloading by com.example.ai.LocalLLMManager.isDownloading.collectAsStateWithLifecycle()
     val downloadProgress by com.example.ai.LocalLLMManager.downloadProgress.collectAsStateWithLifecycle()
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var showPdfDialog by remember { mutableStateOf(false) }
-    var pdfName by remember { mutableStateOf("Ask_Chat_History") }
 
-
-
-    if (showPdfDialog) {
-        AlertDialog(
-            onDismissRequest = { showPdfDialog = false },
-            title = { Text("Export Chat as PDF") },
-            text = {
-                OutlinedTextField(
-                    value = pdfName,
-                    onValueChange = { pdfName = it },
-                    label = { Text("File Name") },
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showPdfDialog = false
-                    exportChatToPdfAndShare(context, messages, pdfName)
-                }) {
-                    Text("Export & Share")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPdfDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Chat History",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(onClick = {
-                        viewModel.startNewChat()
-                        scope.launch { drawerState.close() }
-                    }) {
-                        Icon(Icons.Rounded.Add, contentDescription = "New Chat", tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                    label = { Text("New Chat") },
-                    selected = false,
-                    onClick = {
-                        viewModel.startNewChat()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                HorizontalDivider()
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    if (chatHistory.isEmpty()) {
-                        item { Text("No past chats.", modifier = Modifier.padding(16.dp)) }
-                    }
-                    items(chatHistory, key = { it.id }) { session ->
-                        var showRenameDialog by remember { mutableStateOf(false) }
-                        var newName by remember { mutableStateOf(session.name) }
-                        
-                        if (showRenameDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showRenameDialog = false },
-                                title = { Text("Rename Chat") },
-                                text = {
-                                    OutlinedTextField(
-                                        value = newName,
-                                        onValueChange = { newName = it },
-                                        singleLine = true
-                                    )
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        viewModel.renameSession(session.id, newName)
-                                        showRenameDialog = false
-                                    }) { Text("Save") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
-                                }
-                            )
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.loadHistorySession(session)
-                                    scope.launch { drawerState.close() }
-                                }
-                                .padding(vertical = 4.dp, horizontal = 8.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text(text = session.name, maxLines = 1, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                                IconButton(onClick = { showRenameDialog = true }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Rounded.Edit, contentDescription = "Rename", modifier = Modifier.size(16.dp))
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(onClick = { viewModel.deleteSession(session.id) }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    ) {
         val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
         val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
         val allUniqueApps by viewModel.allUniqueApps.collectAsStateWithLifecycle()
@@ -201,7 +81,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
         var showFilterDialog by remember { mutableStateOf(false) }
 
         // Wizard states
-        var isSearchExpanded by remember { mutableStateOf(false) }
+        var isSearchExpanded by remember { mutableStateOf(true) }
         var wizardSelectedApp by remember { mutableStateOf("") }
         var wizardMonth by remember { mutableStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1) }
         var wizardYear by remember { mutableStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)) }
@@ -214,24 +94,17 @@ fun ChatScreen(viewModel: ChatViewModel) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("AI Ask Intelligence", fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        scope.launch { drawerState.open() }
-                    }) {
-                        Icon(Icons.Rounded.Menu, contentDescription = "Menu")
+            LargeTopAppBar(
+                title = { 
+                    Column {
+                        Text("AI Finder", fontWeight = FontWeight.ExtraBold)
+                        Text("Analyze & Search History", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                actions = {
-                    IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showPdfDialog = true
-                    }) {
-                        Icon(Icons.Rounded.Share, contentDescription = "Share Chat as PDF")
-                    }
-                }
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
+                )
             )
         }
     ) { padding ->
@@ -371,16 +244,38 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 .padding(padding)
         ) {
 
+            val msgListState = androidx.compose.foundation.lazy.rememberLazyListState()
             LazyColumn(
+                state = msgListState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .simpleVerticalScrollbar(msgListState),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 reverseLayout = true
             ) {
-                items(messages.reversed()) { msg ->
-                    ChatBubbleItem(msg)
+                if (messages.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillParentMaxWidth()
+                                .height(300.dp)
+                                .animateContentSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(16.dp))
+                            Text("Welcome to AI Finder!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.height(8.dp))
+                            Text("Ask questions about your captured notifications. AI will help you filter, find, and summarize alerts intelligently.", textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    items(messages.reversed()) { msg ->
+                        ChatBubbleItem(msg)
+                    }
                 }
             }
 
@@ -389,6 +284,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .heightIn(max = 600.dp)
                         .animateContentSize(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
@@ -396,12 +292,13 @@ fun ChatScreen(viewModel: ChatViewModel) {
                     ),
                     border = BorderStroke(
                         1.dp, 
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                        MaterialTheme.colorScheme.outlineVariant
                     )
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    Column {
+                        Column(modifier = Modifier.weight(1f, fill = false).padding(14.dp).verticalScroll(rememberScrollState())) {
+                            Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -414,24 +311,10 @@ fun ChatScreen(viewModel: ChatViewModel) {
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "AI Search Guider",
+                                    text = "AI Finder Filters",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isSearchExpanded = false
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Close,
-                                    contentDescription = "Collapse filters",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -580,17 +463,41 @@ fun ChatScreen(viewModel: ChatViewModel) {
                             onValueChange = { wizardKeyword = it },
                             placeholder = { Text("e.g. key details, urgent notification...") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 14.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                             )
                         )
+                        
+                        val realTimePreview = remember(wizardSelectedApp, wizardKeyword, activeNotifications) {
+                            if (wizardSelectedApp.isNotEmpty() && wizardKeyword.isNotBlank()) {
+                                activeNotifications.filter { it.appName == wizardSelectedApp || it.packageName == wizardSelectedApp }
+                                    .filter { it.title.contains(wizardKeyword, ignoreCase = true) || it.content.contains(wizardKeyword, ignoreCase = true) }
+                                    .take(5) // Limit to 5 previews
+                            } else {
+                                emptyList()
+                            }
+                        }
+
+                        androidx.compose.animation.AnimatedVisibility(visible = realTimePreview.isNotEmpty()) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                                Text("Real-time Preview from History (${realTimePreview.size} matches)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    realTimePreview.forEach { record ->
+                                        ChatNotificationCardItem(record, highlightKeyword = wizardKeyword)
+                                    }
+                                }
+                            }
+                        }
+
+                        }
 
                         // 4. Action Row
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OutlinedButton(
@@ -630,63 +537,6 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 }
             }
 
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).padding(bottom = 8.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = 2.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { 
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        popupSearchQuery = ""
-                        showAppPopup = true 
-                    }) {
-                        Icon(Icons.Rounded.Search, contentDescription = "Select App Popup", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    
-                    TextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Ask about notifications...") },
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                            unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                        )
-                    )
-
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            isSearchExpanded = !isSearchExpanded
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Tune,
-                            contentDescription = "AI Search Guider",
-                            tint = if (isSearchExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.sendMessage(inputText)
-                                inputText = ""
-                            }
-                        }
-                    ) {
-                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
         }
     }
     
@@ -754,7 +604,6 @@ fun ChatScreen(viewModel: ChatViewModel) {
             }
         )
     }
-    }
 }
 
 @Composable
@@ -764,6 +613,15 @@ fun ChatBubbleItem(message: ChatMessage) {
     val textColor = if (message.isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
     val clipboardManager = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
+
+    var copied by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(copied) {
+        if (copied) {
+            kotlinx.coroutines.delay(2000)
+            copied = false
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxWidth().animateContentSize(),
@@ -804,14 +662,15 @@ fun ChatBubbleItem(message: ChatMessage) {
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         clipboardManager.setText(AnnotatedString(message.text))
+                        copied = true
                     },
                     modifier = Modifier.size(32.dp).padding(top = 4.dp)
                 ) {
                     Icon(
-                        Icons.Rounded.ContentCopy, 
+                        if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy, 
                         contentDescription = "Copy", 
                         modifier = Modifier.size(16.dp), 
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -820,15 +679,40 @@ fun ChatBubbleItem(message: ChatMessage) {
 }
 
 @Composable
-fun ChatNotificationCardItem(record: NotificationRecord) {
+fun ChatNotificationCardItem(record: NotificationRecord, highlightKeyword: String? = null) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            kotlinx.coroutines.delay(2000)
+            copied = false
+        }
+    }
+
     val appIcon = remember(record.packageName) {
         com.example.util.IconProvider.getAppIcon(context, record.packageName)
     }
     val timeStr = remember(record.timestamp) {
         java.text.SimpleDateFormat("MMM dd, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(record.timestamp))
+    }
+
+    // Helper for highlighting text
+    @Composable
+    fun getHighlightedString(text: String, keyword: String?): AnnotatedString {
+        if (keyword.isNullOrBlank() || !text.contains(keyword, ignoreCase = true)) {
+            return buildAnnotatedString { append(text) }
+        }
+        return buildAnnotatedString {
+            val startIndex = text.indexOf(keyword, ignoreCase = true)
+            append(text.substring(0, startIndex))
+            withStyle(style = androidx.compose.ui.text.SpanStyle(background = MaterialTheme.colorScheme.primaryContainer, color = MaterialTheme.colorScheme.onPrimaryContainer)) {
+                append(text.substring(startIndex, startIndex + keyword.length))
+            }
+            append(text.substring(startIndex + keyword.length))
+        }
     }
 
     Card(
@@ -837,12 +721,13 @@ fun ChatNotificationCardItem(record: NotificationRecord) {
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 clipboardManager.setText(AnnotatedString("${record.title}: ${record.content}"))
+                copied = true
             },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -867,17 +752,21 @@ fun ChatNotificationCardItem(record: NotificationRecord) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
+                if (copied) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(Icons.Rounded.Check, contentDescription = "Copied", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                }
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = record.title,
+                text = getHighlightedString(record.title, highlightKeyword),
                 fontWeight = FontWeight.ExtraBold,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = record.content,
+                text = getHighlightedString(record.content, highlightKeyword),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

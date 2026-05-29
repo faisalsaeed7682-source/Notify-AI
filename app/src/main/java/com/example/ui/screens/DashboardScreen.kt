@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import android.content.Context
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.NotificationRecord
+import com.example.util.simpleVerticalScrollbar
 import java.text.SimpleDateFormat
 import java.util.*
 import android.speech.tts.TextToSpeech
@@ -67,7 +69,6 @@ fun DashboardScreen(
 
     
     val haptic = LocalHapticFeedback.current
-    val selectedCategory = "All"
     
     val baseNotifications = notifications.filter { !it.isArchived && !it.isSpam }
     val pinnedNotifications = baseNotifications.filter { it.isPinned }
@@ -77,6 +78,19 @@ fun DashboardScreen(
     
     var expandedApps by remember { mutableStateOf(setOf<String>()) }
     var isSearchActive by remember { mutableStateOf(false) }
+    
+    DisposableEffect(Unit) {
+        onDispose {
+            isSearchActive = false
+            viewModel.updateSearchQuery("")
+        }
+    }
+
+    BackHandler(enabled = isSearchActive) {
+        isSearchActive = false
+        viewModel.updateSearchQuery("")
+    }
+
     val scope = rememberCoroutineScope()
  
     val context = LocalContext.current
@@ -128,7 +142,14 @@ fun DashboardScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.updateTimeFilter(TimeFilter.TODAY)
+        viewModel.updateTimeFilter(TimeFilter.ALL)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            isSearchActive = false
+            viewModel.updateSearchQuery("")
+        }
     }
 
     Scaffold(
@@ -142,7 +163,10 @@ fun DashboardScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.selectAll(filteredNotifications.map { it.id }) }) {
+                        IconButton(onClick = { 
+                            val currentlyVisibleIds = filteredNotifications.filter { expandedApps.contains(it.packageName) || it.isPinned }.map { it.id }
+                            viewModel.selectAll(currentlyVisibleIds) 
+                        }) {
                             Icon(Icons.Rounded.SelectAll, contentDescription = "Select All")
                         }
                         IconButton(onClick = { viewModel.starSelected() }) {
@@ -213,17 +237,23 @@ fun DashboardScreen(
                             value = searchQuery,
                             onValueChange = { viewModel.updateSearchQuery(it) },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            placeholder = { Text("Guided AI Search (try 'from gmail in may' or 'Sami')") },
-                            leadingIcon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            placeholder = { Text("Search notifications, apps, or content...") },
+                            leadingIcon = { 
+                                IconButton(onClick = { 
+                                    isSearchActive = false
+                                    viewModel.updateSearchQuery("") 
+                                }) {
+                                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Close Search", tint = MaterialTheme.colorScheme.primary) 
+                                }
+                            },
                             singleLine = true,
                             shape = RoundedCornerShape(100),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp).copy(alpha = 0.6f),
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp).copy(alpha = 0.4f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
                                 focusedBorderColor = MaterialTheme.colorScheme.primary
                             )
                         )
-                        // Suggestion chips related to guided AI search scenarions
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -232,8 +262,8 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Guided AI: ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            val suggestions = listOf("from Gmail in May", "Sami", "Urgent News", "Urgent on Whatsapp", "Starred Notifications")
+                            Text("Suggestions: ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            val suggestions = listOf("WhatsApp", "Instagram", "System", "Urgent")
                             suggestions.forEach { suggestion ->
                                 SuggestionChip(
                                     onClick = {
@@ -256,14 +286,17 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Only actual scrollable list content is inside the LazyColumn
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .simpleVerticalScrollbar(listState),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                if (pinnedNotifications.isNotEmpty() && !isSearchActive && selectedCategory == "All") {
+                if (pinnedNotifications.isNotEmpty() && !isSearchActive) {
                     item(key = "pinned_center") {
                         Column(modifier = Modifier.padding(vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
@@ -288,12 +321,15 @@ fun DashboardScreen(
                                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha=0.2f))
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                                 Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f)), contentAlignment = Alignment.Center) {
                                                     Text(record.appName.take(1).uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                                 }
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text(record.appName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, maxLines = 1)
+                                                Text(record.appName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
+                                                IconButton(onClick = { viewModel.togglePin(record.id) }, modifier = Modifier.size(24.dp)) {
+                                                    Icon(Icons.Rounded.PushPin, contentDescription = "Unpin Notification", modifier = Modifier.size(16.dp))
+                                                }
                                             }
                                             Spacer(modifier = Modifier.height(8.dp))
                                             Text(record.title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -364,13 +400,13 @@ fun DashboardScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Rounded.FilterListOff, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(modifier = Modifier.height(12.dp))
-                                Text("No matches for '$selectedCategory'", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text("No matches for filter", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                 Text("Try changing your filter or search query.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -450,6 +486,7 @@ fun DashboardScreen(
 }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AppGroupCard(
 appName: String, count: Int, isExpanded: Boolean, latestMsg: String, onToggle: () -> Unit, packageName: String? = null, onBlock: () -> Unit = {}, onDelete: () -> Unit = {}) {
@@ -463,7 +500,16 @@ appName: String, count: Int, isExpanded: Boolean, latestMsg: String, onToggle: (
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onToggle() }.animateContentSize(animationSpec = tween(300)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { onToggle() },
+                onLongClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showMenu = true 
+                }
+            )
+            .animateContentSize(animationSpec = tween(300)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -514,20 +560,34 @@ appName: String, count: Int, isExpanded: Boolean, latestMsg: String, onToggle: (
                 contentDescription = "Expand"
             )
             Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Rounded.MoreVert, contentDescription = "More")
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Move All to Trash", color = MaterialTheme.colorScheme.error) }, onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showMenu = false
-                        onDelete()
-                    })
-                    DropdownMenuItem(text = { Text("Block App", color = MaterialTheme.colorScheme.error) }, onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showMenu = false
-                        onBlock()
-                    })
+                if (showMenu) {
+                    ModalBottomSheet(onDismissRequest = { showMenu = false }) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Manage $appName", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(16.dp))
+                            ListItem(
+                                headlineContent = { Text("Move All to Trash") },
+                                supportingContent = { Text("Delete all notifications from this app") },
+                                leadingContent = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                modifier = Modifier.clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showMenu = false
+                                    onDelete()
+                                }
+                            )
+                            ListItem(
+                                headlineContent = { Text("Block App") },
+                                supportingContent = { Text("Stop capturing notifications for this app") },
+                                leadingContent = { Icon(Icons.Rounded.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                modifier = Modifier.clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showMenu = false
+                                    onBlock()
+                                }
+                            )
+                            Spacer(Modifier.height(32.dp))
+                        }
+                    }
                 }
             }
         }

@@ -21,7 +21,6 @@ data class NotificationRecord(
     val isImportant: Boolean = false,
     val imagePath: String? = null,
     val reminderTimestamp: Long? = null,
-    val labelId: String? = null,
     val notificationKey: String? = null,
     val hasReply: Boolean = false,
     val isStarred: Boolean = false,

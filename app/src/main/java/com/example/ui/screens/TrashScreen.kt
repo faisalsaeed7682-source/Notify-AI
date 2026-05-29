@@ -113,7 +113,7 @@ fun TrashScreen(
                                 onClick = {
                                     if (isSelectionMode) viewModel.toggleSelection(record.id)
                                 },
-                                onLongClick = { viewModel.toggleSelection(record.id) },
+                            onLongClick = { },
                                 onDelete = { viewModel.deletePermanently(record.id) },
                                 onArchive = { viewModel.restoreNotification(record.id) },
                                 onStar = {},

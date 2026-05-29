@@ -82,7 +82,21 @@ class MainActivity : FragmentActivity() {
             val isDarkTheme = when(themeMode) {
                 1 -> false
                 2 -> true
+                4 -> true
                 else -> isSystemInDarkTheme()
+            }
+            
+            LaunchedEffect(isDarkTheme) {
+                val transparent = android.graphics.Color.TRANSPARENT
+                val style = if (isDarkTheme) {
+                    androidx.activity.SystemBarStyle.dark(transparent)
+                } else {
+                    androidx.activity.SystemBarStyle.light(transparent, transparent)
+                }
+                enableEdgeToEdge(
+                    statusBarStyle = style,
+                    navigationBarStyle = style
+                )
             }
             
             MyApplicationTheme(themeMode = themeMode) {
